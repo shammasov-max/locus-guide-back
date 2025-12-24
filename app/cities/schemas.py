@@ -22,17 +22,7 @@ class CityResponse(BaseModel):
     distance_km: Optional[float] = Field(None, description="Distance from user in km")
     timezone: Optional[str] = Field(None, description="Timezone identifier")
 
-    class Config:
-        from_attributes = True
-
-
-class AutocompleteRequest(BaseModel):
-    """Request parameters for autocomplete endpoint"""
-    q: str = Field(..., min_length=1, max_length=200, description="Search query")
-    lang: str = Field("en", description="Language for results (en, ru, de)")
-    lat: Optional[float] = Field(None, ge=-90, le=90, description="User latitude")
-    lon: Optional[float] = Field(None, ge=-180, le=180, description="User longitude")
-    limit: int = Field(10, ge=1, le=50, description="Maximum number of results")
+    model_config = {"from_attributes": True}
 
 
 class AutocompleteResponse(BaseModel):

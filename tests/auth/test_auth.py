@@ -1,6 +1,6 @@
 class TestRegistration:
     def test_register_success(self, client, test_user_data):
-        response = client.post("/api/v1/api/v1/auth/register", json=test_user_data)
+        response = client.post("/api/v1/auth/register", json=test_user_data)
         assert response.status_code == 201
 
         data = response.json()

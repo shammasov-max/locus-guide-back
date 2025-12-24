@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth.router import router as auth_router
+from app.cities.router import router as cities_router
 
 
 @asynccontextmanager
@@ -13,8 +14,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Locus Guide Auth API",
-    description="Authentication API for Locus Guide audio tour application",
+    title="Locus Guide API",
+    description="Backend API for Locus Guide audio tour application",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -28,8 +29,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(auth_router, prefix="/auth", tags=["auth"])
+# Include routers with /api/v1 prefix
+app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(cities_router, prefix="/api/v1/cities", tags=["cities"])
 
 
 @app.get("/health")

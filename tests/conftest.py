@@ -23,6 +23,7 @@ def setup_test_database():
     """Create test database schema once per test session."""
     # Import models to register them
     from app.auth import models  # noqa: F401
+    from app.cities import models as cities_models  # noqa: F401
 
     # Create all tables
     Base.metadata.create_all(bind=engine)
@@ -75,7 +76,7 @@ def test_user_data():
 @pytest.fixture
 def registered_user(client, test_user_data):
     """Register a user and return the response data."""
-    response = client.post("/auth/register", json=test_user_data)
+    response = client.post("/api/v1/auth/register", json=test_user_data)
     assert response.status_code == 201
     return response.json()
 

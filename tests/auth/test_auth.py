@@ -1,6 +1,6 @@
 class TestRegistration:
     def test_register_success(self, client, test_user_data):
-        response = client.post("/auth/register", json=test_user_data)
+        response = client.post("/api/v1/api/v1/auth/register", json=test_user_data)
         assert response.status_code == 201
 
         data = response.json()
@@ -12,12 +12,12 @@ class TestRegistration:
         assert "refresh_token" in data["tokens"]
 
     def test_register_duplicate_email(self, client, test_user_data, registered_user):
-        response = client.post("/auth/register", json=test_user_data)
+        response = client.post("/api/v1/auth/register", json=test_user_data)
         assert response.status_code == 409
 
     def test_register_invalid_email(self, client):
         response = client.post(
-            "/auth/register",
+            "/api/v1/auth/register",
             json={
                 "email": "invalid-email",
                 "password": "securepassword123",
@@ -27,7 +27,7 @@ class TestRegistration:
 
     def test_register_short_password(self, client):
         response = client.post(
-            "/auth/register",
+            "/api/v1/auth/register",
             json={
                 "email": "test@example.com",
                 "password": "short",
@@ -39,7 +39,7 @@ class TestRegistration:
 class TestLogin:
     def test_login_success(self, client, test_user_data, registered_user):
         response = client.post(
-            "/auth/login",
+            "/api/v1/auth/login",
             json={
                 "email": test_user_data["email"],
                 "password": test_user_data["password"],
@@ -54,7 +54,7 @@ class TestLogin:
 
     def test_login_wrong_password(self, client, test_user_data, registered_user):
         response = client.post(
-            "/auth/login",
+            "/api/v1/auth/login",
             json={
                 "email": test_user_data["email"],
                 "password": "wrongpassword",
@@ -64,7 +64,7 @@ class TestLogin:
 
     def test_login_nonexistent_user(self, client):
         response = client.post(
-            "/auth/login",
+            "/api/v1/auth/login",
             json={
                 "email": "nonexistent@example.com",
                 "password": "password123",
@@ -76,7 +76,7 @@ class TestLogin:
 class TestRefreshToken:
     def test_refresh_success(self, client, registered_user):
         response = client.post(
-            "/auth/refresh",
+            "/api/v1/auth/refresh",
             json={"refresh_token": registered_user["tokens"]["refresh_token"]},
         )
         assert response.status_code == 200
@@ -87,7 +87,7 @@ class TestRefreshToken:
 
     def test_refresh_invalid_token(self, client):
         response = client.post(
-            "/auth/refresh",
+            "/api/v1/auth/refresh",
             json={"refresh_token": "invalid-token"},
         )
         assert response.status_code == 401
@@ -95,7 +95,7 @@ class TestRefreshToken:
 
 class TestProfile:
     def test_get_me(self, client, auth_headers, test_user_data):
-        response = client.get("/auth/me", headers=auth_headers)
+        response = client.get("/api/v1/auth/me", headers=auth_headers)
         assert response.status_code == 200
 
         data = response.json()
@@ -103,12 +103,12 @@ class TestProfile:
         assert data["display_name"] == test_user_data["display_name"]
 
     def test_get_me_unauthorized(self, client):
-        response = client.get("/auth/me")
+        response = client.get("/api/v1/auth/me")
         assert response.status_code == 401  # No auth header
 
     def test_update_profile(self, client, auth_headers):
         response = client.patch(
-            "/auth/me",
+            "/api/v1/auth/me",
             headers=auth_headers,
             json={
                 "display_name": "Updated Name",
@@ -125,7 +125,7 @@ class TestProfile:
 class TestLogout:
     def test_logout_success(self, client, auth_headers, registered_user):
         response = client.post(
-            "/auth/logout",
+            "/api/v1/auth/logout",
             headers=auth_headers,
             json={"refresh_token": registered_user["tokens"]["refresh_token"]},
         )
@@ -133,20 +133,20 @@ class TestLogout:
 
         # Verify refresh token is invalidated
         refresh_response = client.post(
-            "/auth/refresh",
+            "/api/v1/auth/refresh",
             json={"refresh_token": registered_user["tokens"]["refresh_token"]},
         )
         assert refresh_response.status_code == 401
 
     def test_logout_all(self, client, auth_headers, registered_user):
-        response = client.post("/auth/logout-all", headers=auth_headers)
+        response = client.post("/api/v1/auth/logout-all", headers=auth_headers)
         assert response.status_code == 200
 
 
 class TestPasswordReset:
     def test_request_password_reset(self, client, registered_user, test_user_data):
         response = client.post(
-            "/auth/password-reset/request",
+            "/api/v1/auth/password-reset/request",
             json={"email": test_user_data["email"]},
         )
         assert response.status_code == 200
@@ -157,7 +157,7 @@ class TestPasswordReset:
     def test_confirm_password_reset(self, client, registered_user, test_user_data):
         # Request reset token
         request_response = client.post(
-            "/auth/password-reset/request",
+            "/api/v1/auth/password-reset/request",
             json={"email": test_user_data["email"]},
         )
         reset_token = request_response.json()["reset_token"]
@@ -165,7 +165,7 @@ class TestPasswordReset:
         # Confirm reset
         new_password = "newpassword123"
         confirm_response = client.post(
-            "/auth/password-reset/confirm",
+            "/api/v1/auth/password-reset/confirm",
             json={
                 "token": reset_token,
                 "new_password": new_password,
@@ -175,7 +175,7 @@ class TestPasswordReset:
 
         # Login with new password
         login_response = client.post(
-            "/auth/login",
+            "/api/v1/auth/login",
             json={
                 "email": test_user_data["email"],
                 "password": new_password,
@@ -186,12 +186,12 @@ class TestPasswordReset:
 
 class TestDeleteAccount:
     def test_delete_account(self, client, auth_headers, test_user_data):
-        response = client.delete("/auth/me", headers=auth_headers)
+        response = client.delete("/api/v1/auth/me", headers=auth_headers)
         assert response.status_code == 200
 
         # Verify user is deleted
         login_response = client.post(
-            "/auth/login",
+            "/api/v1/auth/login",
             json={
                 "email": test_user_data["email"],
                 "password": test_user_data["password"],

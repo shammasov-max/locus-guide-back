@@ -10,6 +10,7 @@ from app.config import get_settings
 
 # Import models to register them with Base.metadata
 from app.auth import models  # noqa: F401
+from app.cities import models as cities_models  # noqa: F401
 
 config = context.config
 

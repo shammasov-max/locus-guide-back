@@ -22,6 +22,15 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     email_from: str = ""
 
+    # Cities API settings
+    cities_default_limit: int = 10
+    cities_max_limit: int = 50
+    cities_min_query_length: int = 1
+    cities_languages: list = ["en", "ru", "de"]
+    geoip_enabled: bool = True
+    geoip_url: str = "http://ip-api.com/json/{ip}"
+    data_dir: str = "./data"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

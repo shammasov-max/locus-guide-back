@@ -22,6 +22,7 @@ def list_routes(
     lon: float | None = Query(None, ge=-180, le=180, description="User longitude for nearby filter"),
     nearby_km: float = Query(50.0, ge=1, le=500, description="Radius in km for nearby search"),
     status: list[str] | None = Query(None, description="Filter by route status"),
+    search: str | None = Query(None, min_length=2, max_length=100, description="Search in title and description"),
     lang: str = Query("en", description="Language for i18n content"),
     limit: int = Query(20, ge=1, le=100, description="Max results"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
@@ -30,7 +31,8 @@ def list_routes(
     List available routes with optional filters.
 
     - **city_id**: Filter routes by city
-    - **lat/lon**: Filter routes near user location
+    - **lat/lon**: Filter routes near user location (uses first checkpoint)
+    - **search**: Search in route titles and descriptions
     - **status**: Filter by route status (published, coming_soon, etc)
     - **lang**: Language for titles and descriptions
     """
@@ -42,6 +44,7 @@ def list_routes(
         lon=lon,
         nearby_km=nearby_km,
         status_filter=status,
+        search=search,
         limit=limit,
         offset=offset,
         lang=lang

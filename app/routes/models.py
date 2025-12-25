@@ -62,7 +62,12 @@ class Route(Base):
     )
     slug: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(
-        Enum(RouteStatus, name="route_status", create_type=False),
+        Enum(
+            RouteStatus,
+            name="route_status",
+            create_type=False,
+            values_callable=lambda enum: [e.value for e in enum]
+        ),
         nullable=False,
         server_default="draft",
     )
@@ -121,7 +126,12 @@ class RouteVersion(Base):
     )
     version_no: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(
-        Enum(RouteVersionStatus, name="route_version_status", create_type=False),
+        Enum(
+            RouteVersionStatus,
+            name="route_version_status",
+            create_type=False,
+            values_callable=lambda enum: [e.value for e in enum]
+        ),
         nullable=False,
     )
     title_i18n: Mapped[dict] = mapped_column(HSTORE, nullable=False)
@@ -246,7 +256,12 @@ class VisitedPoint(Base):
     )
     visited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     audio_status: Mapped[str] = mapped_column(
-        Enum(AudioListenStatus, name="audio_listen_status", create_type=False),
+        Enum(
+            AudioListenStatus,
+            name="audio_listen_status",
+            create_type=False,
+            values_callable=lambda enum: [e.value for e in enum]
+        ),
         nullable=False,
         server_default="none",
     )
@@ -300,7 +315,12 @@ class UserActiveRoute(Base):
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completion_type: Mapped[str | None] = mapped_column(
-        Enum(CompletionType, name="completion_type", create_type=False)
+        Enum(
+            CompletionType,
+            name="completion_type",
+            create_type=False,
+            values_callable=lambda enum: [e.value for e in enum]
+        )
     )
 
     # Relationships

@@ -94,6 +94,7 @@ class RouteService:
         lon: float | None = None,
         nearby_km: float = 50.0,
         status_filter: list[str] | None = None,
+        search: str | None = None,
         limit: int = 20,
         offset: int = 0,
         lang: str = "en"
@@ -114,8 +115,43 @@ class RouteService:
             if statuses:
                 query = query.filter(Route.status.in_(statuses))
 
-        # TODO: nearby filter using first checkpoint location
-        # This requires joining checkpoints and using ST_DWithin
+        # Filter by search query in title/summary for specified language
+        if search:
+            search_pattern = f"%{search.lower()}%"
+            query = query.filter(
+                or_(
+                    func.lower(RouteVersion.title_i18n[lang]).ilike(search_pattern),
+                    func.lower(RouteVersion.summary_i18n[lang]).ilike(search_pattern)
+                )
+            )
+
+        # Nearby filter using first checkpoint location (seq_no=0)
+        if lat is not None and lon is not None:
+            # Subquery to get first checkpoint (seq_no=0) of each published version
+            first_checkpoint_sq = self.db.query(
+                Checkpoint.route_version_id,
+                Checkpoint.location
+            ).filter(
+                Checkpoint.seq_no == 0
+            ).subquery('first_checkpoints')
+
+            # Create a point from user coordinates (lon, lat order for PostGIS)
+            user_point = ST_SetSRID(ST_MakePoint(lon, lat), 4326)
+
+            # Convert km to meters for ST_DWithin
+            distance_meters = nearby_km * 1000
+
+            # Join with first checkpoints and filter by distance
+            query = query.join(
+                first_checkpoint_sq,
+                RouteVersion.id == first_checkpoint_sq.c.route_version_id
+            ).filter(
+                ST_DWithin(
+                    first_checkpoint_sq.c.location,
+                    user_point,
+                    distance_meters
+                )
+            )
 
         count = query.count()
         routes = query.offset(offset).limit(limit).all()

@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth.router import router as auth_router
 from app.cities.router import router as cities_router
+from app.routes.router import router as routes_router
 
 
 @asynccontextmanager
@@ -32,6 +33,7 @@ app.add_middleware(
 # Include routers with /api/v1 prefix
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(cities_router, prefix="/api/v1/cities", tags=["cities"])
+app.include_router(routes_router, prefix="/api/v1/routes", tags=["routes"])
 
 
 @app.get("/health")

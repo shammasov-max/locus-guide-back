@@ -41,8 +41,8 @@ class AuthService:
     def _create_tokens(
         self, user: AppUser, device_info: str | None = None
     ) -> TokenResponse:
-        # Create access token
-        access_token = create_access_token(user.id, user.token_version)
+        # Create access token (include role for authorization)
+        access_token = create_access_token(user.id, user.token_version, user.role)
 
         # Create refresh token
         raw_token, hashed_token, expires_at = create_refresh_token()

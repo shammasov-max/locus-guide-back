@@ -49,6 +49,7 @@ def generate_token() -> str:
 def create_access_token(
     user_id: int,
     token_version: int,
+    role: str = "user",
     expires_delta: timedelta | None = None,
 ) -> str:
     if expires_delta is None:
@@ -58,6 +59,7 @@ def create_access_token(
     to_encode = {
         "sub": str(user_id),
         "tv": token_version,  # token version for logout-all
+        "role": role,
         "exp": expire,
         "type": "access",
     }

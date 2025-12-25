@@ -1,9 +1,11 @@
+import enum
 from datetime import datetime
 from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
+    Enum,
     ForeignKey,
     Index,
     Integer,
@@ -15,6 +17,12 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+
+class UserRole(str, enum.Enum):
+    USER = "user"
+    EDITOR = "editor"
+    ADMIN = "admin"
 
 
 class AppUser(Base):
@@ -34,6 +42,16 @@ class AppUser(Base):
     )
     token_version: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="0"
+    )
+    role: Mapped[str] = mapped_column(
+        Enum(
+            UserRole,
+            name="user_role",
+            create_type=False,
+            values_callable=lambda enum: [e.value for e in enum]
+        ),
+        nullable=False,
+        server_default="user"
     )
 
     # Relationships

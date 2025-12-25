@@ -3,7 +3,8 @@
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.routes.dependencies import RouteServiceDep, CurrentUser
+from app.routes.dependencies import RouteServiceDep
+from app.auth.dependencies import RequireEditor
 from app.routes.schemas import (
     RouteCreateRequest,
     RouteUpdateRequest,
@@ -27,9 +28,9 @@ router = APIRouter()
 def create_route(
     data: RouteCreateRequest,
     route_service: RouteServiceDep,
-    current_user: CurrentUser,
+    current_user: RequireEditor,
 ):
-    """Create a new route (admin only)."""
+    """Create a new route (editor/admin only)."""
     result = route_service.create_route(
         user_id=current_user.id,
         city_id=data.city_id,
@@ -42,13 +43,13 @@ def create_route(
 @router.get("", response_model=dict)  # {count, routes}
 def list_routes_admin(
     route_service: RouteServiceDep,
-    current_user: CurrentUser,
+    current_user: RequireEditor,
     city_id: int | None = Query(None),
     status: list[str] | None = Query(None),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
-    """List all routes for admin (includes drafts, archived)."""
+    """List all routes for admin (includes drafts, archived). Requires editor role."""
     return route_service.list_routes_admin(
         city_id=city_id,
         status=status,
@@ -61,9 +62,9 @@ def list_routes_admin(
 def get_route_admin(
     route_id: UUID,
     route_service: RouteServiceDep,
-    current_user: CurrentUser,
+    current_user: RequireEditor,
 ):
-    """Get route details for admin."""
+    """Get route details for admin. Requires editor role."""
     result = route_service.get_route_admin(route_id)
     if not result:
         raise HTTPException(status_code=404, detail="Route not found")
@@ -75,9 +76,9 @@ def update_route(
     route_id: UUID,
     data: RouteUpdateRequest,
     route_service: RouteServiceDep,
-    current_user: CurrentUser,
+    current_user: RequireEditor,
 ):
-    """Update route metadata."""
+    """Update route metadata. Requires editor role."""
     result = route_service.update_route(
         route_id=route_id,
         slug=data.slug,
@@ -92,9 +93,9 @@ def update_route(
 def delete_route(
     route_id: UUID,
     route_service: RouteServiceDep,
-    current_user: CurrentUser,
+    current_user: RequireEditor,
 ):
-    """Delete a route."""
+    """Delete a route. Requires editor role."""
     if not route_service.delete_route(route_id):
         raise HTTPException(status_code=404, detail="Route not found")
 
@@ -106,9 +107,9 @@ def delete_route(
 def list_route_versions(
     route_id: UUID,
     route_service: RouteServiceDep,
-    current_user: CurrentUser,
+    current_user: RequireEditor,
 ):
-    """List all versions of a route."""
+    """List all versions of a route. Requires editor role."""
     versions = route_service.get_route_versions(route_id)
     return {"route_id": route_id, "versions": versions}
 
@@ -122,9 +123,9 @@ def create_route_version(
     route_id: UUID,
     data: RouteVersionCreateRequest,
     route_service: RouteServiceDep,
-    current_user: CurrentUser,
+    current_user: RequireEditor,
 ):
-    """Create a new route version from GeoJSON."""
+    """Create a new route version from GeoJSON. Requires editor role."""
     result = route_service.create_route_version(
         route_id=route_id,
         user_id=current_user.id,
@@ -142,9 +143,9 @@ def update_route_version(
     version_id: UUID,
     data: RouteVersionUpdateRequest,
     route_service: RouteServiceDep,
-    current_user: CurrentUser,
+    current_user: RequireEditor,
 ):
-    """Update route version metadata."""
+    """Update route version metadata. Requires editor role."""
     result = route_service.update_route_version(
         version_id, data.model_dump(exclude_unset=True)
     )
@@ -160,9 +161,9 @@ def publish_version(
     route_id: UUID,
     data: PublishVersionRequest,
     route_service: RouteServiceDep,
-    current_user: CurrentUser,
+    current_user: RequireEditor,
 ):
-    """Publish a route version."""
+    """Publish a route version. Requires editor role."""
     result = route_service.publish_version(route_id, data.version_id)
     if not result:
         raise HTTPException(status_code=404, detail="Route or version not found")
@@ -178,9 +179,9 @@ def publish_version(
 def get_version_checkpoints(
     version_id: UUID,
     route_service: RouteServiceDep,
-    current_user: CurrentUser,
+    current_user: RequireEditor,
 ):
-    """Get all checkpoints for a version."""
+    """Get all checkpoints for a version. Requires editor role."""
     return route_service.get_version_checkpoints_admin(version_id)
 
 
@@ -189,9 +190,9 @@ def update_checkpoint(
     checkpoint_id: UUID,
     data: CheckpointUpdateRequest,
     route_service: RouteServiceDep,
-    current_user: CurrentUser,
+    current_user: RequireEditor,
 ):
-    """Update checkpoint metadata."""
+    """Update checkpoint metadata. Requires editor role."""
     result = route_service.update_checkpoint(
         checkpoint_id, data.model_dump(exclude_unset=True)
     )

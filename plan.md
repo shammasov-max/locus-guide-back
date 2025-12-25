@@ -124,11 +124,34 @@ CREATE TYPE completion_type AS ENUM ('manual', 'automatic');
 | POST | `/api/v1/routes/{id}/start` | Start route (locks version) |
 | POST | `/api/v1/routes/{id}/finish` | Finish route manually |
 
+### Phase 3: Admin (requires auth)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/routes/admin` | Create new route |
+| GET | `/api/v1/routes/admin` | List all routes (incl. drafts) |
+| GET | `/api/v1/routes/admin/{route_id}` | Get route admin details |
+| PATCH | `/api/v1/routes/admin/{route_id}` | Update route metadata |
+| DELETE | `/api/v1/routes/admin/{route_id}` | Delete route |
+| GET | `/api/v1/routes/admin/{route_id}/versions` | List versions |
+| POST | `/api/v1/routes/admin/{route_id}/versions` | Create version from GeoJSON |
+| PATCH | `/api/v1/routes/admin/versions/{version_id}` | Update version |
+| POST | `/api/v1/routes/admin/{route_id}/publish` | Publish version |
+| GET | `/api/v1/routes/admin/versions/{version_id}/checkpoints` | Get checkpoints |
+| PATCH | `/api/v1/routes/admin/checkpoints/{checkpoint_id}` | Update checkpoint |
+
 ---
+
+## Completed
+
+- [x] Database migration with 5 tables, 4 enums
+- [x] Phase 1: Read endpoints (public routes listing)
+- [x] Phase 2: User progress endpoints (visit tracking, audio status)
+- [x] Phase 3: Admin endpoints (route/version/checkpoint management)
+- [x] GeoJSON import with automatic checkpoint creation
 
 ## Next Steps
 
-1. Run migration: `alembic upgrade head`
-2. Create admin/editor endpoints for route management (Phase 3)
-3. Implement GeoJSON import from frontend editor
-4. Add nearby routes filter using first checkpoint location
+1. Add nearby routes filter using first checkpoint location
+2. Add role-based access control for admin endpoints
+3. Implement route search by title/description

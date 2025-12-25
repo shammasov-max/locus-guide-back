@@ -24,6 +24,39 @@ def setup_test_database():
     # Import models to register them
     from app.auth import models  # noqa: F401
     from app.cities import models as cities_models  # noqa: F401
+    from app.routes import models as routes_models  # noqa: F401
+
+    # Create extensions and enum types that SQLAlchemy create_all doesn't handle
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS hstore"))
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
+        # Create route enums
+        conn.execute(text("""
+            DO $$ BEGIN
+                CREATE TYPE route_status AS ENUM ('draft', 'published', 'coming_soon', 'archived');
+            EXCEPTION WHEN duplicate_object THEN null;
+            END $$
+        """))
+        conn.execute(text("""
+            DO $$ BEGIN
+                CREATE TYPE route_version_status AS ENUM ('draft', 'review', 'published', 'superseded');
+            EXCEPTION WHEN duplicate_object THEN null;
+            END $$
+        """))
+        conn.execute(text("""
+            DO $$ BEGIN
+                CREATE TYPE audio_listen_status AS ENUM ('none', 'started', 'completed');
+            EXCEPTION WHEN duplicate_object THEN null;
+            END $$
+        """))
+        conn.execute(text("""
+            DO $$ BEGIN
+                CREATE TYPE completion_type AS ENUM ('manual', 'automatic');
+            EXCEPTION WHEN duplicate_object THEN null;
+            END $$
+        """))
+        conn.commit()
 
     # Create all tables
     Base.metadata.create_all(bind=engine)

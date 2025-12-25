@@ -3,7 +3,8 @@ from uuid import UUID
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import Session, selectinload, joinedload
 from geoalchemy2.functions import ST_Distance, ST_DWithin, ST_SetSRID, ST_MakePoint
-from geoalchemy2.shape import to_shape
+from geoalchemy2.shape import to_shape, from_shape
+from shapely.geometry import LineString, Point, shape
 
 from app.routes.models import (
     Route, RouteVersion, Checkpoint, VisitedPoint, UserActiveRoute,
@@ -543,3 +544,346 @@ class RouteService:
                 **progress
             }
         }
+
+    # ========== Admin Operations ==========
+
+    def create_route(self, user_id: int, city_id: int, slug: str, status: str = "draft") -> Route:
+        """Create new route"""
+        route = Route(
+            created_by_user_id=user_id,
+            city_id=city_id,
+            slug=slug,
+            status=RouteStatus(status)
+        )
+        self.db.add(route)
+        self.db.commit()
+        self.db.refresh(route)
+        return route
+
+    def update_route(self, route_id: UUID, slug: str | None = None, status: str | None = None) -> Route | None:
+        """Update route metadata"""
+        route = self.db.query(Route).filter(Route.id == route_id).first()
+        if not route:
+            return None
+
+        if slug is not None:
+            route.slug = slug
+        if status is not None:
+            route.status = RouteStatus(status)
+
+        self.db.commit()
+        self.db.refresh(route)
+        return route
+
+    def delete_route(self, route_id: UUID) -> bool:
+        """Delete route (cascades to versions, checkpoints)"""
+        route = self.db.query(Route).filter(Route.id == route_id).first()
+        if not route:
+            return False
+
+        self.db.delete(route)
+        self.db.commit()
+        return True
+
+    def get_route_admin(self, route_id: UUID) -> dict | None:
+        """Get route with version count for admin view"""
+        route = self.db.query(Route).filter(Route.id == route_id).first()
+        if not route:
+            return None
+
+        version_count = self.db.query(func.count(RouteVersion.id)).filter(
+            RouteVersion.route_id == route_id
+        ).scalar() or 0
+
+        city = self.db.query(City).filter(City.geonameid == route.city_id).first()
+
+        return {
+            "id": route.id,
+            "slug": route.slug,
+            "status": route.status.value,
+            "city_id": route.city_id,
+            "city_name": city.name if city else "",
+            "created_by_user_id": route.created_by_user_id,
+            "published_version_id": route.published_version_id,
+            "version_count": version_count,
+            "created_at": route.created_at,
+            "updated_at": route.updated_at
+        }
+
+    def list_routes_admin(
+        self,
+        city_id: int | None = None,
+        status: list[str] | None = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> dict:
+        """List routes for admin with all statuses"""
+        query = self.db.query(Route)
+
+        if city_id:
+            query = query.filter(Route.city_id == city_id)
+
+        if status:
+            statuses = [RouteStatus(s) for s in status if s in RouteStatus.__members__.values()]
+            if statuses:
+                query = query.filter(Route.status.in_(statuses))
+
+        count = query.count()
+        routes = query.order_by(Route.created_at.desc()).offset(offset).limit(limit).all()
+
+        result = []
+        for route in routes:
+            version_count = self.db.query(func.count(RouteVersion.id)).filter(
+                RouteVersion.route_id == route.id
+            ).scalar() or 0
+
+            city = self.db.query(City).filter(City.geonameid == route.city_id).first()
+
+            result.append({
+                "id": route.id,
+                "slug": route.slug,
+                "status": route.status.value,
+                "city_id": route.city_id,
+                "city_name": city.name if city else "",
+                "created_by_user_id": route.created_by_user_id,
+                "published_version_id": route.published_version_id,
+                "version_count": version_count,
+                "created_at": route.created_at,
+                "updated_at": route.updated_at
+            })
+
+        return {"count": count, "routes": result}
+
+    def create_route_version(self, route_id: UUID, user_id: int, data: dict) -> RouteVersion | None:
+        """Create version from data dict with automatic checkpoint creation"""
+        route = self.db.query(Route).filter(Route.id == route_id).first()
+        if not route:
+            return None
+
+        # Auto-set version_no to max(existing) + 1
+        max_version = self.db.query(func.max(RouteVersion.version_no)).filter(
+            RouteVersion.route_id == route_id
+        ).scalar() or 0
+        version_no = max_version + 1
+
+        # Create version
+        version = RouteVersion(
+            route_id=route_id,
+            version_no=version_no,
+            created_by_user_id=user_id,
+            status=RouteVersionStatus.DRAFT,
+            title_i18n=data.get("title_i18n", {}),
+            summary_i18n=data.get("summary_i18n"),
+            languages=data.get("languages", []),
+            duration_min=data.get("duration_min"),
+            distance_m=data.get("distance_m"),
+            ascent_m=data.get("ascent_m"),
+            descent_m=data.get("descent_m"),
+            geojson=data.get("geojson"),
+            free_checkpoint_limit=data.get("free_checkpoint_limit", 0),
+            price_amount=data.get("price_amount"),
+            price_currency=data.get("price_currency", "USD")
+        )
+        self.db.add(version)
+        self.db.flush()
+
+        # Extract features from geojson and create checkpoints
+        if "geojson" in data and data["geojson"]:
+            features = data["geojson"].get("features", [])
+            seq_no = 0
+
+            for feature in features:
+                geom = shape(feature["geometry"])
+                if isinstance(geom, Point):
+                    props = feature.get("properties", {})
+                    checkpoint = Checkpoint(
+                        route_version_id=version.id,
+                        seq_no=seq_no,
+                        source_point_id=props.get("id"),
+                        title_i18n=props.get("title_i18n", {"en": f"Point {seq_no}"}),
+                        description_i18n=props.get("description_i18n"),
+                        location=from_shape(geom, srid=4326),
+                        display_number=props.get("display_number"),
+                        is_visible=props.get("is_visible", True),
+                        trigger_radius_m=props.get("trigger_radius_m", 25),
+                        is_free_preview=seq_no < data.get("free_checkpoint_limit", 0),
+                        osm_way_id=props.get("osm_way_id"),
+                    )
+                    self.db.add(checkpoint)
+                    seq_no += 1
+                elif isinstance(geom, LineString):
+                    version.path = from_shape(geom, srid=4326)
+
+        self.db.commit()
+        self.db.refresh(version)
+        return version
+
+    def get_route_versions(self, route_id: UUID) -> list[dict]:
+        """List all versions for a route"""
+        versions = self.db.query(RouteVersion).filter(
+            RouteVersion.route_id == route_id
+        ).order_by(RouteVersion.version_no.desc()).all()
+
+        result = []
+        for version in versions:
+            checkpoint_count = self.db.query(func.count(Checkpoint.id)).filter(
+                Checkpoint.route_version_id == version.id
+            ).scalar() or 0
+
+            result.append({
+                "id": version.id,
+                "route_id": version.route_id,
+                "version_no": version.version_no,
+                "status": version.status.value,
+                "created_by_user_id": version.created_by_user_id,
+                "title_i18n": version.title_i18n,
+                "summary_i18n": version.summary_i18n,
+                "languages": version.languages,
+                "duration_min": version.duration_min,
+                "distance_m": version.distance_m,
+                "ascent_m": version.ascent_m,
+                "descent_m": version.descent_m,
+                "free_checkpoint_limit": version.free_checkpoint_limit,
+                "price_amount": version.price_amount,
+                "price_currency": version.price_currency,
+                "checkpoint_count": checkpoint_count,
+                "created_at": version.created_at,
+                "updated_at": version.updated_at,
+                "published_at": version.published_at
+            })
+
+        return result
+
+    def update_route_version(self, version_id: UUID, data: dict) -> RouteVersion | None:
+        """Update version metadata (not checkpoints)"""
+        version = self.db.query(RouteVersion).filter(RouteVersion.id == version_id).first()
+        if not version:
+            return None
+
+        # Update fields if provided
+        if "title_i18n" in data:
+            version.title_i18n = data["title_i18n"]
+        if "summary_i18n" in data:
+            version.summary_i18n = data["summary_i18n"]
+        if "languages" in data:
+            version.languages = data["languages"]
+        if "duration_min" in data:
+            version.duration_min = data["duration_min"]
+        if "distance_m" in data:
+            version.distance_m = data["distance_m"]
+        if "ascent_m" in data:
+            version.ascent_m = data["ascent_m"]
+        if "descent_m" in data:
+            version.descent_m = data["descent_m"]
+        if "free_checkpoint_limit" in data:
+            version.free_checkpoint_limit = data["free_checkpoint_limit"]
+        if "price_amount" in data:
+            version.price_amount = data["price_amount"]
+        if "price_currency" in data:
+            version.price_currency = data["price_currency"]
+        if "geojson" in data:
+            version.geojson = data["geojson"]
+
+        version.updated_at = datetime.now(timezone.utc)
+        self.db.commit()
+        self.db.refresh(version)
+        return version
+
+    def publish_version(self, route_id: UUID, version_id: UUID) -> Route | None:
+        """Set version status to published and update route"""
+        route = self.db.query(Route).filter(Route.id == route_id).first()
+        if not route:
+            return None
+
+        version = self.db.query(RouteVersion).filter(RouteVersion.id == version_id).first()
+        if not version or version.route_id != route_id:
+            return None
+
+        # Set any previously published version to superseded
+        if route.published_version_id:
+            old_version = self.db.query(RouteVersion).filter(
+                RouteVersion.id == route.published_version_id
+            ).first()
+            if old_version:
+                old_version.status = RouteVersionStatus.SUPERSEDED
+                old_version.updated_at = datetime.now(timezone.utc)
+
+        # Publish new version
+        version.status = RouteVersionStatus.PUBLISHED
+        version.published_at = datetime.now(timezone.utc)
+        version.updated_at = datetime.now(timezone.utc)
+
+        # Update route
+        route.published_version_id = version_id
+        if route.status != RouteStatus.PUBLISHED:
+            route.status = RouteStatus.PUBLISHED
+        route.updated_at = datetime.now(timezone.utc)
+
+        self.db.commit()
+        self.db.refresh(route)
+        return route
+
+    def update_checkpoint(self, checkpoint_id: UUID, data: dict) -> Checkpoint | None:
+        """Update checkpoint metadata"""
+        checkpoint = self.db.query(Checkpoint).filter(Checkpoint.id == checkpoint_id).first()
+        if not checkpoint:
+            return None
+
+        # Update fields if provided
+        if "seq_no" in data:
+            checkpoint.seq_no = data["seq_no"]
+        if "source_point_id" in data:
+            checkpoint.source_point_id = data["source_point_id"]
+        if "title_i18n" in data:
+            checkpoint.title_i18n = data["title_i18n"]
+        if "description_i18n" in data:
+            checkpoint.description_i18n = data["description_i18n"]
+        if "display_number" in data:
+            checkpoint.display_number = data["display_number"]
+        if "is_visible" in data:
+            checkpoint.is_visible = data["is_visible"]
+        if "trigger_radius_m" in data:
+            checkpoint.trigger_radius_m = data["trigger_radius_m"]
+        if "is_free_preview" in data:
+            checkpoint.is_free_preview = data["is_free_preview"]
+        if "osm_way_id" in data:
+            checkpoint.osm_way_id = data["osm_way_id"]
+        if "location" in data and "lat" in data["location"] and "lon" in data["location"]:
+            point = Point(data["location"]["lon"], data["location"]["lat"])
+            checkpoint.location = from_shape(point, srid=4326)
+
+        checkpoint.updated_at = datetime.now(timezone.utc)
+        self.db.commit()
+        self.db.refresh(checkpoint)
+        return checkpoint
+
+    def get_version_checkpoints_admin(self, version_id: UUID) -> list[dict]:
+        """Get all checkpoints for a version (admin view, all fields)"""
+        checkpoints = self.db.query(Checkpoint).filter(
+            Checkpoint.route_version_id == version_id
+        ).order_by(Checkpoint.seq_no).all()
+
+        result = []
+        for cp in checkpoints:
+            point = to_shape(cp.location)
+            result.append({
+                "id": cp.id,
+                "route_version_id": cp.route_version_id,
+                "seq_no": cp.seq_no,
+                "source_point_id": cp.source_point_id,
+                "title_i18n": cp.title_i18n,
+                "description_i18n": cp.description_i18n,
+                "location": {
+                    "lat": point.y,
+                    "lon": point.x
+                },
+                "display_number": cp.display_number,
+                "is_visible": cp.is_visible,
+                "trigger_radius_m": cp.trigger_radius_m,
+                "is_free_preview": cp.is_free_preview,
+                "osm_way_id": cp.osm_way_id,
+                "created_at": cp.created_at,
+                "updated_at": cp.updated_at
+            })
+
+        return result

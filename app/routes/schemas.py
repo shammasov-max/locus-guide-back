@@ -143,3 +143,135 @@ class StartRouteRequest(BaseModel):
 class FinishRouteRequest(BaseModel):
     """Finish a route (empty for now, could add feedback later)"""
     pass
+
+
+# ============ Admin Request Schemas ============
+
+class RouteCreateRequest(BaseModel):
+    """Create a new route"""
+    city_id: int = Field(..., description="City geonameid")
+    slug: str = Field(..., min_length=1, max_length=100, description="URL-friendly route identifier")
+    status: RouteStatusType = "draft"
+
+
+class RouteUpdateRequest(BaseModel):
+    """Update route metadata"""
+    slug: str | None = None
+    status: RouteStatusType | None = None
+
+
+class RouteVersionCreateRequest(BaseModel):
+    """Create a new route version from GeoJSON"""
+    title_i18n: dict[str, str] = Field(..., description="Titles in different languages")
+    summary_i18n: dict[str, str] | None = None
+    languages: list[str] = Field(..., min_length=1)
+    duration_min: int | None = None
+    distance_m: int | None = None
+    ascent_m: int | None = None
+    descent_m: int | None = None
+    geojson: dict = Field(..., description="Full GeoJSON FeatureCollection")
+    free_checkpoint_limit: int = Field(0, ge=0)
+    price_amount: Decimal | None = None
+    price_currency: str | None = Field(None, min_length=3, max_length=3)
+
+
+class RouteVersionUpdateRequest(BaseModel):
+    """Update route version metadata"""
+    title_i18n: dict[str, str] | None = None
+    summary_i18n: dict[str, str] | None = None
+    duration_min: int | None = None
+    distance_m: int | None = None
+    ascent_m: int | None = None
+    descent_m: int | None = None
+    free_checkpoint_limit: int | None = Field(None, ge=0)
+    price_amount: Decimal | None = None
+    price_currency: str | None = None
+
+
+class PublishVersionRequest(BaseModel):
+    """Publish a route version"""
+    version_id: UUID
+
+
+class CheckpointUpdateRequest(BaseModel):
+    """Update checkpoint metadata"""
+    display_number: int | None = None
+    is_visible: bool | None = None
+    title_i18n: dict[str, str] | None = None
+    description_i18n: dict[str, str] | None = None
+    trigger_radius_m: int | None = Field(None, gt=0)
+    is_free_preview: bool | None = None
+
+
+# ============ Admin Response Schemas ============
+
+class RouteAdminResponse(BaseModel):
+    """Route for admin views (includes all versions)"""
+    id: UUID
+    city_id: int
+    city_name: str
+    slug: str
+    status: RouteStatusType
+    published_version_id: UUID | None
+    created_by_user_id: int
+    created_at: datetime
+    updated_at: datetime
+    version_count: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class RouteVersionAdminResponse(BaseModel):
+    """Route version for admin views"""
+    id: UUID
+    route_id: UUID
+    version_no: int
+    status: RouteVersionStatusType
+    title_i18n: dict[str, str]
+    summary_i18n: dict[str, str] | None
+    languages: list[str]
+    duration_min: int | None
+    distance_m: int | None
+    ascent_m: int | None
+    descent_m: int | None
+    free_checkpoint_limit: int
+    price_amount: Decimal | None
+    price_currency: str | None
+    published_at: datetime | None
+    created_at: datetime
+    created_by_user_id: int
+    checkpoint_count: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class CheckpointLocation(BaseModel):
+    """Checkpoint location coordinates"""
+    lat: float
+    lon: float
+
+
+class CheckpointAdminResponse(BaseModel):
+    """Checkpoint for admin views"""
+    id: UUID
+    route_version_id: UUID
+    seq_no: int
+    display_number: int | None
+    is_visible: bool
+    source_point_id: int | None
+    title_i18n: dict[str, str]
+    description_i18n: dict[str, str] | None
+    location: CheckpointLocation
+    trigger_radius_m: int
+    is_free_preview: bool
+    osm_way_id: int | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class RouteVersionsListResponse(BaseModel):
+    """List of versions for a route"""
+    route_id: UUID
+    versions: list[RouteVersionAdminResponse]

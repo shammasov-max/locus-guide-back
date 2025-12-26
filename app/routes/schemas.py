@@ -71,6 +71,7 @@ class RouteListItem(BaseModel):
     city_name: str
     checkpoint_count: int
     user_progress: "UserRouteProgress | None" = None
+    is_wished: bool = False  # True if user has active wish for this route
 
     model_config = {"from_attributes": True}
 

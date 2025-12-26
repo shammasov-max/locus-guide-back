@@ -9,10 +9,12 @@ class CitySearchService:
 
     SEARCH_QUERY_WITH_COORDS = """
         WITH matched_cities AS (
-            SELECT DISTINCT si.geonameid
+            SELECT
+                si.geonameid,
+                MAX(similarity(si.search_term_lower, :query)) AS sim_score
             FROM city_search_index si
             WHERE si.search_term_lower LIKE :query_pattern
-            LIMIT 1000
+            GROUP BY si.geonameid
         )
         SELECT
             c.geonameid,
@@ -40,16 +42,18 @@ class CitySearchService:
             ORDER BY is_preferred DESC, is_short ASC
             LIMIT 1
         ) an ON true
-        ORDER BY distance_km ASC, c.population DESC
+        ORDER BY mc.sim_score DESC, distance_km ASC NULLS LAST, c.population DESC
         LIMIT :limit
     """
 
     SEARCH_QUERY_NO_COORDS = """
         WITH matched_cities AS (
-            SELECT DISTINCT si.geonameid
+            SELECT
+                si.geonameid,
+                MAX(similarity(si.search_term_lower, :query)) AS sim_score
             FROM city_search_index si
             WHERE si.search_term_lower LIKE :query_pattern
-            LIMIT 1000
+            GROUP BY si.geonameid
         )
         SELECT
             c.geonameid,
@@ -74,7 +78,7 @@ class CitySearchService:
             ORDER BY is_preferred DESC, is_short ASC
             LIMIT 1
         ) an ON true
-        ORDER BY c.population DESC
+        ORDER BY mc.sim_score DESC, c.population DESC
         LIMIT :limit
     """
 
@@ -100,7 +104,7 @@ class CitySearchService:
             limit: Maximum number of results
 
         Returns:
-            List of matching cities sorted by distance (if coords provided) then population
+            List of matching cities sorted by similarity, then distance (if coords), then population
         """
         query_pattern = query.lower() + "%"
 
@@ -108,6 +112,7 @@ class CitySearchService:
             result = self.db.execute(
                 text(self.SEARCH_QUERY_WITH_COORDS),
                 {
+                    "query": query.lower(),
                     "query_pattern": query_pattern,
                     "lang": lang,
                     "user_lat": lat,
@@ -119,6 +124,7 @@ class CitySearchService:
             result = self.db.execute(
                 text(self.SEARCH_QUERY_NO_COORDS),
                 {
+                    "query": query.lower(),
                     "query_pattern": query_pattern,
                     "lang": lang,
                     "limit": limit,

@@ -149,9 +149,7 @@ CREATE TYPE completion_type AS ENUM ('manual', 'automatic');
 - [x] Phase 2: User progress endpoints (visit tracking, audio status)
 - [x] Phase 3: Admin endpoints (route/version/checkpoint management)
 - [x] GeoJSON import with automatic checkpoint creation
-
-## Next Steps
-
-1. Add nearby routes filter using first checkpoint location
-2. Add role-based access control for admin endpoints
-3. Implement route search by title/description
+- [x] Nearby routes filter using first checkpoint location (PostGIS ST_DWithin)
+- [x] Role-based access control for admin endpoints (user/editor/admin roles)
+- [x] Route search by title/description (case-insensitive HSTORE search)
+- [x] Comprehensive tests (19 test cases)

@@ -89,6 +89,4 @@ class MessageResponse(BaseModel):
 
 class PasswordResetRequestResponse(BaseModel):
     message: str
-    # In development mode, return the token for testing
-    # In production, this should be removed
     reset_token: str | None = None

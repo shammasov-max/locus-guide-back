@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from uuid import UUID
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, exists
 from sqlalchemy.orm import Session, selectinload, joinedload
 from geoalchemy2.functions import ST_Distance, ST_DWithin, ST_SetSRID, ST_MakePoint
 from geoalchemy2.shape import to_shape, from_shape
@@ -95,6 +95,7 @@ class RouteService:
         nearby_km: float = 50.0,
         status_filter: list[str] | None = None,
         search: str | None = None,
+        wished: bool | None = None,
         limit: int = 20,
         offset: int = 0,
         lang: str = "en"
@@ -153,18 +154,83 @@ class RouteService:
                 )
             )
 
+        # Filter by wished status (requires user_id)
+        if wished is not None and user_id:
+            from app.wishes.models import WishedRoute
+            if wished:
+                # Only routes user has wished
+                query = query.join(
+                    WishedRoute,
+                    and_(
+                        WishedRoute.route_id == Route.id,
+                        WishedRoute.user_id == user_id,
+                        WishedRoute.is_active == True  # noqa: E712
+                    )
+                )
+            else:
+                # Exclude routes user has wished
+                wished_subq = self.db.query(WishedRoute.route_id).filter(
+                    WishedRoute.user_id == user_id,
+                    WishedRoute.is_active == True  # noqa: E712
+                ).subquery()
+                query = query.filter(~Route.id.in_(select(wished_subq)))
+
         count = query.count()
         routes = query.offset(offset).limit(limit).all()
+
+        if not routes:
+            return {"count": count, "routes": []}
+
+        # Batch fetch related data to avoid N+1 queries
+        route_ids = [r.id for r in routes]
+        version_ids = [r.published_version_id for r in routes]
+
+        # Batch fetch cities
+        city_ids = [r.city_id for r in routes]
+        cities = {
+            c.geonameid: c
+            for c in self.db.query(City).filter(City.geonameid.in_(city_ids)).all()
+        }
+
+        # Batch fetch checkpoint counts
+        checkpoint_counts = dict(
+            self.db.query(Checkpoint.route_version_id, func.count(Checkpoint.id))
+            .filter(
+                Checkpoint.route_version_id.in_(version_ids),
+                Checkpoint.is_visible == True  # noqa: E712
+            )
+            .group_by(Checkpoint.route_version_id)
+            .all()
+        )
+
+        # Batch fetch wish statuses for user
+        wished_route_ids = set()
+        if user_id:
+            from app.wishes.models import WishedRoute
+            wished_route_ids = {
+                r.route_id for r in self.db.query(WishedRoute.route_id).filter(
+                    WishedRoute.user_id == user_id,
+                    WishedRoute.route_id.in_(route_ids),
+                    WishedRoute.is_active == True  # noqa: E712
+                ).all()
+            }
+
+        # Batch fetch active routes for user
+        active_routes = {}
+        if user_id:
+            active_routes = {
+                ar.route_id: ar for ar in self.db.query(UserActiveRoute).filter(
+                    UserActiveRoute.user_id == user_id,
+                    UserActiveRoute.route_id.in_(route_ids)
+                ).all()
+            }
 
         result = []
         for route in routes:
             version = route.published_version
-            checkpoint_count = self.db.query(func.count(Checkpoint.id)).filter(
-                Checkpoint.route_version_id == version.id,
-                Checkpoint.is_visible == True
-            ).scalar() or 0
-
-            city = self.db.query(City).filter(City.geonameid == route.city_id).first()
+            city = cities.get(route.city_id)
+            checkpoint_count = checkpoint_counts.get(version.id, 0)
+            is_wished = route.id in wished_route_ids
 
             item = {
                 "id": route.id,
@@ -183,15 +249,13 @@ class RouteService:
                 "city_id": route.city_id,
                 "city_name": city.name if city else "",
                 "checkpoint_count": checkpoint_count,
-                "user_progress": None
+                "user_progress": None,
+                "is_wished": is_wished,
             }
 
             # Add user progress if authenticated
             if user_id:
-                active = self.db.query(UserActiveRoute).filter(
-                    UserActiveRoute.user_id == user_id,
-                    UserActiveRoute.route_id == route.id
-                ).first()
+                active = active_routes.get(route.id)
                 if active:
                     progress = self._calculate_user_progress(user_id, active.locked_version_id)
                     item["user_progress"] = {

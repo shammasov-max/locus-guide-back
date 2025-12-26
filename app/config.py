@@ -3,6 +3,9 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
+    # Application
+    debug: bool = False
+
     # Database
     database_url: str = "postgresql://postgres:postgres@localhost:5433/locus_guide"
 

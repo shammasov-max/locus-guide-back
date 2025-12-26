@@ -6,6 +6,8 @@ from app.auth.router import router as auth_router
 from app.cities.router import router as cities_router
 from app.routes.router import router as routes_router
 from app.routes.admin_router import router as routes_admin_router
+from app.wishes.router import router as wishes_router
+from app.wishes.admin_router import router as wishes_admin_router
 
 
 @asynccontextmanager
@@ -36,6 +38,8 @@ app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(cities_router, prefix="/api/v1/cities", tags=["cities"])
 app.include_router(routes_router, prefix="/api/v1/routes", tags=["routes"])
 app.include_router(routes_admin_router, prefix="/api/v1/routes/admin", tags=["routes-admin"])
+app.include_router(wishes_router, prefix="/api/v1/wishes", tags=["wishes"])
+app.include_router(wishes_admin_router, prefix="/api/v1/wishes/admin", tags=["wishes-admin"])
 
 
 @app.get("/health")

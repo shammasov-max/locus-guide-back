@@ -1,5 +1,6 @@
 from fastapi import APIRouter, status
 
+from app.config import get_settings
 from app.auth.dependencies import AuthServiceDep, CurrentUser, DeviceInfo
 from app.auth.oauth.google import verify_google_token
 from app.auth.schemas import (
@@ -80,11 +81,11 @@ def request_password_reset(
 ):
     """Request a password reset email."""
     reset_token = auth_service.request_password_reset(data.email)
+    settings = get_settings()
 
-    # In production, don't return the token - send it via email
     return PasswordResetRequestResponse(
         message="If the email exists, a password reset link has been sent.",
-        reset_token=reset_token,  # Remove in production
+        reset_token=reset_token if settings.debug else None,
     )
 
 

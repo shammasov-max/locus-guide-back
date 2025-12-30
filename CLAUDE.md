@@ -5,6 +5,17 @@
 - User stories: `docs/user-stories.md`
 - План разработки: `plan.md`
  
+## User Stories Editing Rules
+
+When editing `docs/user-stories.md`:
+
+- **Format:** "Как [роль], я хочу [что], чтобы [почему]" (15-30 words)
+- **Merge stories:** 60%+ overlap (same actor + goal + почему)
+- **Delete stories:** Epics ("вся часть", no acceptance criteria)
+- **Keep numbering:** Don't renumber after merge/delete (gaps OK)
+- **Technical details:** API/schema → Acceptance Criteria, not story text
+- **Version pinning:** Always explicit for progress/sync ("привязывался к версии, с которой я начал")
+
 
 ## Стек
 - **FastAPI** + Uvicorn (async)

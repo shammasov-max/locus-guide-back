@@ -15,7 +15,7 @@ def get_route_wish_stats(
     current_user: RequireEditor,
     status: list[str] | None = Query(
         None,
-        description="Filter by route status (coming_soon, published, etc)"
+        description="Filter by trip status (coming_soon, published, etc)"
     ),
     city_id: int | None = Query(None, description="Filter by city geonameid"),
     min_wishes: int = Query(0, ge=0, description="Minimum active wish count"),
@@ -24,10 +24,10 @@ def get_route_wish_stats(
     offset: int = Query(0, ge=0, description="Pagination offset"),
 ):
     """
-    Get aggregated wish counts per route for prioritization.
+    Get aggregated wish counts per trip for prioritization.
 
     Sorted by active wish count (descending).
-    Use to identify which coming_soon routes have most demand.
+    Use to identify which coming_soon trips have most demand.
     Requires editor role.
     """
     return wish_service.get_route_wish_stats(
@@ -52,7 +52,7 @@ def get_city_want_stats(
     ),
     has_routes: bool | None = Query(
         None,
-        description="Filter by whether city has published routes"
+        description="Filter by whether city has published trips"
     ),
     min_wants: int = Query(0, ge=0, description="Minimum active want count"),
     limit: int = Query(50, ge=1, le=100, description="Max results"),
@@ -62,7 +62,7 @@ def get_city_want_stats(
     Get aggregated want counts per city for expansion planning.
 
     Sorted by active want count (descending).
-    Use to identify which cities users want routes in most.
+    Use to identify which cities users want trips in most.
     Requires editor role.
     """
     return wish_service.get_city_want_stats(

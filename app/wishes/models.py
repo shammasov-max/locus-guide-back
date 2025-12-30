@@ -1,4 +1,4 @@
-"""SQLAlchemy models for user wishes (routes) and wants (cities)."""
+"""SQLAlchemy models for user wishes (trips) and wants (cities)."""
 
 from datetime import datetime
 from uuid import UUID
@@ -19,12 +19,12 @@ from app.database import Base
 
 
 class WishedRoute(Base):
-    """User's wish for a coming_soon route.
+    """User's wish for a coming_soon trip.
 
-    Tracks user interest in routes that are not yet published.
+    Tracks user interest in trips that are not yet published.
     Used for:
-    - Notification when route becomes available
-    - Analytics on most anticipated routes
+    - Notification when trip becomes available
+    - Analytics on most anticipated trips
     """
     __tablename__ = "wished_routes"
 
@@ -33,12 +33,16 @@ class WishedRoute(Base):
         ForeignKey("app_user.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    route_id: Mapped[UUID] = mapped_column(
+    trip_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("routes.id", ondelete="CASCADE"),
         primary_key=True,
     )
     is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
+    # US-030: Notification preference for trip publish
+    notify_on_publish: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="true"
     )
     created_at: Mapped[datetime] = mapped_column(
@@ -53,12 +57,12 @@ class WishedRoute(Base):
 
     # Relationships
     user: Mapped["AppUser"] = relationship()  # type: ignore
-    route: Mapped["Route"] = relationship()  # type: ignore
+    trip: Mapped["Trip"] = relationship()  # type: ignore
 
     __table_args__ = (
         Index(
             "idx_wished_routes_route_active",
-            "route_id",
+            "trip_id",
             postgresql_where="is_active = true",
         ),
         Index(
@@ -70,11 +74,11 @@ class WishedRoute(Base):
 
 
 class WantedCity(Base):
-    """User's want for routes in a city.
+    """User's want for trips in a city.
 
-    Tracks user interest in cities that don't have routes yet.
+    Tracks user interest in cities that don't have trips yet.
     Used for:
-    - Notification when first route is added to city
+    - Notification when first trip is added to city
     - Analytics on most wanted cities for expansion
     """
     __tablename__ = "wanted_cities"

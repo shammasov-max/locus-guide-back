@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 
 # ============ Type Aliases ============
 
-RouteStatusType = Literal["draft", "published", "coming_soon", "archived"]
-RouteVersionStatusType = Literal["draft", "review", "published", "superseded"]
+TripStatusType = Literal["draft", "published", "coming_soon", "archived"]
+RouteStatusType = Literal["draft", "review", "published", "superseded"]
 AudioListenStatusType = Literal["none", "started", "completed"]
 CompletionTypeValue = Literal["manual", "automatic"]
 
@@ -41,8 +41,8 @@ class CheckpointProgressResponse(CheckpointResponse):
     audio_completed_at: datetime | None = None
 
 
-class UserRouteProgress(BaseModel):
-    """User's progress on a route"""
+class UserTripProgress(BaseModel):
+    """User's progress on a trip"""
     started_at: datetime | None = None
     completed_at: datetime | None = None
     completion_type: CompletionTypeValue | None = None
@@ -52,12 +52,12 @@ class UserRouteProgress(BaseModel):
     progress_percent: float = 0.0
 
 
-class RouteListItem(BaseModel):
-    """Route summary for list views"""
+class TripListItem(BaseModel):
+    """Trip summary for list views"""
     id: UUID
     slug: str
-    status: RouteStatusType
-    title: str  # From current version
+    status: TripStatusType
+    title: str  # From current route
     summary: str | None
     duration_min: int | None
     distance_m: int | None
@@ -70,20 +70,20 @@ class RouteListItem(BaseModel):
     city_id: int
     city_name: str
     checkpoint_count: int
-    user_progress: "UserRouteProgress | None" = None
-    is_wished: bool = False  # True if user has active wish for this route
+    user_progress: "UserTripProgress | None" = None
+    is_wished: bool = False  # True if user has active wish for this trip
 
     model_config = {"from_attributes": True}
 
 
-class RouteDetailResponse(BaseModel):
-    """Complete route details"""
+class TripDetailResponse(BaseModel):
+    """Complete trip details"""
     id: UUID
     slug: str
-    status: RouteStatusType
+    status: TripStatusType
     city_id: int
     city_name: str
-    version_id: UUID
+    route_id: UUID
     version_no: int
     title: str
     summary: str | None
@@ -99,28 +99,28 @@ class RouteDetailResponse(BaseModel):
     checkpoint_count: int
     created_at: datetime
     published_at: datetime | None
-    user_progress: "UserRouteProgress | None" = None
+    user_progress: "UserTripProgress | None" = None
 
     model_config = {"from_attributes": True}
 
 
-class UserActiveRouteResponse(BaseModel):
-    """User's active route with locked version"""
+class UserActiveTripResponse(BaseModel):
+    """User's active trip with locked route"""
     id: UUID
-    route: RouteListItem
-    locked_version_id: UUID
+    trip: TripListItem
+    locked_route_id: UUID
     started_at: datetime
     completed_at: datetime | None
     completion_type: CompletionTypeValue | None
-    progress: UserRouteProgress
+    progress: UserTripProgress
 
     model_config = {"from_attributes": True}
 
 
-class RouteListResponse(BaseModel):
-    """Paginated list of routes"""
+class TripListResponse(BaseModel):
+    """Paginated list of trips"""
     count: int
-    routes: list[RouteListItem]
+    trips: list[TripListItem]
 
 
 # ============ Request Schemas ============
@@ -136,33 +136,33 @@ class UpdateAudioStatusRequest(BaseModel):
     status: AudioListenStatusType
 
 
-class StartRouteRequest(BaseModel):
-    """Start a new route (empty for now, could add language preference later)"""
+class StartTripRequest(BaseModel):
+    """Start a new trip (empty for now, could add language preference later)"""
     pass
 
 
-class FinishRouteRequest(BaseModel):
-    """Finish a route (empty for now, could add feedback later)"""
+class FinishTripRequest(BaseModel):
+    """Finish a trip (empty for now, could add feedback later)"""
     pass
 
 
 # ============ Admin Request Schemas ============
 
-class RouteCreateRequest(BaseModel):
-    """Create a new route"""
+class TripCreateRequest(BaseModel):
+    """Create a new trip"""
     city_id: int = Field(..., description="City geonameid")
-    slug: str = Field(..., min_length=1, max_length=100, description="URL-friendly route identifier")
-    status: RouteStatusType = "draft"
+    slug: str = Field(..., min_length=1, max_length=100, description="URL-friendly trip identifier")
+    status: TripStatusType = "draft"
 
 
-class RouteUpdateRequest(BaseModel):
-    """Update route metadata"""
+class TripUpdateRequest(BaseModel):
+    """Update trip metadata"""
     slug: str | None = None
-    status: RouteStatusType | None = None
+    status: TripStatusType | None = None
 
 
-class RouteVersionCreateRequest(BaseModel):
-    """Create a new route version from GeoJSON"""
+class RouteCreateRequest(BaseModel):
+    """Create a new route from GeoJSON"""
     title_i18n: dict[str, str] = Field(..., description="Titles in different languages")
     summary_i18n: dict[str, str] | None = None
     languages: list[str] = Field(..., min_length=1)
@@ -176,8 +176,8 @@ class RouteVersionCreateRequest(BaseModel):
     price_currency: str | None = Field(None, min_length=3, max_length=3)
 
 
-class RouteVersionUpdateRequest(BaseModel):
-    """Update route version metadata"""
+class RouteUpdateRequest(BaseModel):
+    """Update route metadata"""
     title_i18n: dict[str, str] | None = None
     summary_i18n: dict[str, str] | None = None
     duration_min: int | None = None
@@ -189,9 +189,9 @@ class RouteVersionUpdateRequest(BaseModel):
     price_currency: str | None = None
 
 
-class PublishVersionRequest(BaseModel):
-    """Publish a route version"""
-    version_id: UUID
+class PublishRouteRequest(BaseModel):
+    """Publish a route"""
+    route_id: UUID
 
 
 class CheckpointUpdateRequest(BaseModel):
@@ -206,28 +206,28 @@ class CheckpointUpdateRequest(BaseModel):
 
 # ============ Admin Response Schemas ============
 
-class RouteAdminResponse(BaseModel):
-    """Route for admin views (includes all versions)"""
+class TripAdminResponse(BaseModel):
+    """Trip for admin views (includes all routes)"""
     id: UUID
     city_id: int
     city_name: str
     slug: str
-    status: RouteStatusType
-    published_version_id: UUID | None
+    status: TripStatusType
+    published_route_id: UUID | None
     created_by_user_id: int
     created_at: datetime
     updated_at: datetime
-    version_count: int = 0
+    route_count: int = 0
 
     model_config = {"from_attributes": True}
 
 
-class RouteVersionAdminResponse(BaseModel):
-    """Route version for admin views"""
+class RouteAdminResponse(BaseModel):
+    """Route for admin views"""
     id: UUID
-    route_id: UUID
+    trip_id: UUID
     version_no: int
-    status: RouteVersionStatusType
+    status: RouteStatusType
     title_i18n: dict[str, str]
     summary_i18n: dict[str, str] | None
     languages: list[str]
@@ -255,7 +255,7 @@ class CheckpointLocation(BaseModel):
 class CheckpointAdminResponse(BaseModel):
     """Checkpoint for admin views"""
     id: UUID
-    route_version_id: UUID
+    route_id: UUID
     seq_no: int
     display_number: int | None
     is_visible: bool
@@ -272,7 +272,7 @@ class CheckpointAdminResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class RouteVersionsListResponse(BaseModel):
-    """List of versions for a route"""
-    route_id: UUID
-    versions: list[RouteVersionAdminResponse]
+class RoutesListResponse(BaseModel):
+    """List of routes for a trip"""
+    trip_id: UUID
+    routes: list[RouteAdminResponse]

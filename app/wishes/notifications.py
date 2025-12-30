@@ -1,7 +1,7 @@
 """Notification interface for wish/want triggers.
 
 This module provides an abstract interface for sending notifications
-when wished routes become available or wanted cities get routes.
+when wished trips become available or wanted cities get trips.
 
 Implementation Notes:
 ---------------------
@@ -9,10 +9,10 @@ Integrate with your push notification service (Firebase Cloud Messaging,
 OneSignal, etc.) by implementing the WishNotificationService interface.
 
 Trigger Points:
-- Route Published: Call in RouteService.publish_version when status
+- Trip Published: Call in RouteService.publish_version when status
   changes from coming_soon to published
-- City Has Route: Call in RouteService.publish_version when publishing
-  the first route in a city
+- City Has Trip: Call in RouteService.publish_version when publishing
+  the first trip in a city
 """
 
 from abc import ABC, abstractmethod
@@ -27,15 +27,15 @@ class WishNotificationService(ABC):
         self, route_id: UUID, route_title: str, user_ids: list[int]
     ) -> None:
         """
-        Send notification when a wished route becomes published.
+        Send notification when a wished trip becomes published.
 
         Message template:
-        "You wished route '{route_title}' - it's waiting for you in the app!"
+        "You wished trip '{route_title}' - it's waiting for you in the app!"
 
         Args:
-            route_id: The route that was published
-            route_title: Title of the route (localized)
-            user_ids: List of user IDs who wished this route
+            route_id: The trip that was published
+            route_title: Title of the trip (localized)
+            user_ids: List of user IDs who wished this trip
         """
         pass
 
@@ -44,15 +44,15 @@ class WishNotificationService(ABC):
         self, geonameid: int, city_name: str, route_id: UUID, user_ids: list[int]
     ) -> None:
         """
-        Send notification when first route is added to a wanted city.
+        Send notification when first trip is added to a wanted city.
 
         Message template:
-        "You wanted routes in {city_name} - it's now available!"
+        "You wanted trips in {city_name} - it's now available!"
 
         Args:
-            geonameid: The city that got a new route
+            geonameid: The city that got a new trip
             city_name: Name of the city
-            route_id: The first published route in the city
+            route_id: The first published trip in the city
             user_ids: List of user IDs who wanted this city
         """
         pass
@@ -69,7 +69,7 @@ class DummyNotificationService(WishNotificationService):
         self, route_id: UUID, route_title: str, user_ids: list[int]
     ) -> None:
         print(
-            f"[NOTIFY] Route '{route_title}' ({route_id}) published, "
+            f"[NOTIFY] Trip '{route_title}' ({route_id}) published, "
             f"would notify {len(user_ids)} users: {user_ids[:5]}..."
         )
 
@@ -77,6 +77,6 @@ class DummyNotificationService(WishNotificationService):
         self, geonameid: int, city_name: str, route_id: UUID, user_ids: list[int]
     ) -> None:
         print(
-            f"[NOTIFY] City '{city_name}' ({geonameid}) has route {route_id}, "
+            f"[NOTIFY] City '{city_name}' ({geonameid}) has trip {route_id}, "
             f"would notify {len(user_ids)} users: {user_ids[:5]}..."
         )

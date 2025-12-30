@@ -9,10 +9,10 @@ from pydantic import BaseModel
 # ============ Response Schemas ============
 
 class WishedRouteResponse(BaseModel):
-    """User's wished route with details."""
-    route_id: UUID
-    route_slug: str
-    route_title: str
+    """User's wished trip with details."""
+    trip_id: UUID
+    trip_slug: str
+    trip_title: str
     city_id: int
     city_name: str
     is_active: bool
@@ -27,7 +27,7 @@ class WantedCityResponse(BaseModel):
     city_name: str
     country_code: str
     is_active: bool
-    has_routes: bool  # True if city now has published routes
+    has_routes: bool  # True if city now has published trips
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -35,7 +35,7 @@ class WantedCityResponse(BaseModel):
 
 class UserWishesResponse(BaseModel):
     """All user's active wishes and wants."""
-    wished_routes: list[WishedRouteResponse]
+    wished_trips: list[WishedRouteResponse]
     wanted_cities: list[WantedCityResponse]
 
 
@@ -49,13 +49,13 @@ class WishActionResponse(BaseModel):
 # ============ Admin Analytics Schemas ============
 
 class RouteWishStatsResponse(BaseModel):
-    """Aggregated wish stats for a route."""
-    route_id: UUID
-    route_slug: str
-    route_title: str
+    """Aggregated wish stats for a trip."""
+    trip_id: UUID
+    trip_slug: str
+    trip_title: str
     city_id: int
     city_name: str
-    route_status: str
+    trip_status: str
     active_wish_count: int
     total_wish_count: int  # Including inactive (historical)
 
@@ -70,7 +70,7 @@ class CityWantStatsResponse(BaseModel):
     country_name: str
     population: int
     has_routes: bool
-    route_count: int
+    trip_count: int
     active_want_count: int
     total_want_count: int  # Including inactive (historical)
 
@@ -78,9 +78,9 @@ class CityWantStatsResponse(BaseModel):
 
 
 class WishStatsListResponse(BaseModel):
-    """Paginated list of route wish stats."""
+    """Paginated list of trip wish stats."""
     count: int
-    routes: list[RouteWishStatsResponse]
+    trips: list[RouteWishStatsResponse]
 
 
 class WantStatsListResponse(BaseModel):

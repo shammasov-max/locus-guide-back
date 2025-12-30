@@ -1,11 +1,13 @@
-# User Stories — Locus Guide (Consolidated)
+# User Stories — Locus Guide (Backend)
+
+> Frontend-only stories (`-FE` suffix) have been moved to `_user-stories-frontend.md`
 
 ## Roles
 
 | Role | Description |
 |------|-------------|
 | **User** | End user of mobile app |
-| **Editor** | Content creator, route editor |
+| **Editor** | Content creator, trip editor |
 | **Admin** | Administrator, product/marketing manager |
 | **System** | Background processes, automation | *(stories deferred to tech spec)*
 
@@ -19,282 +21,228 @@
 
 | ID | Role | Story | Confidence | Comment |
 |---|---|---|---|---|
-| **US-001** | User | я хочу **видеть список доступных городов с количеством маршрутов**, чтобы **выбрать интересующий город для изучения** | 🟢 95% | — |
-| **US-002** | User | я хочу **чтобы приложение автоматически определяло моё местоположение и показывало ближайшие маршруты**, чтобы **быстро найти актуальные варианты** | 🟡 85% | Оригинал уточняет "в определённом городе" |
-| **US-003** | User | я хочу **видеть карточки маршрутов с названием, длительностью, перепадом высот, языком, статусом и ценой**, чтобы **выбрать подходящий маршрут** | 🟢 95% | — |
-| **US-004** | User | я хочу **видеть точки маршрута на карте и слушать доступные аудио до покупки**, чтобы **принять решение о покупке** | 🟡 80% | См. AC ниже |
-| **US-005-FE** | User | я хочу **видеть своё местоположение на карте в реальном времени с направлением движения**, чтобы **ориентироваться** | 🟢 95% | — |
-| **US-012b** | User | я хочу **фильтровать маршруты (Near Me, Purchased, Wished, Wanted, Downloaded)**, чтобы **быстро находить нужное** | 🟡 75% | В оригинале **два US-012b** — это первый. Баг нумерации в источнике |
+| **US-001** | User | I want to **see a list of available cities with trip counts** so that **I can choose a city of interest to explore** | 🟢 95% | — |
+| **US-002** | User | I want **the app to automatically detect my location and show nearby trips** so that **I can quickly find relevant options** | 🟡 85% | Original specifies "in a specific city" |
+| **US-003** | User | I want to **see trip cards with title, duration, elevation gain, language, status, and price** so that **I can choose a suitable trip** | 🟢 95% | — |
+| **US-004** | User | I want to **see trip points on the map and listen to available audio before purchase** so that **I can make a purchase decision** | 🟡 80% | See AC below |
+| **US-012b** | User | I want to **filter trips (Near Me, Purchased, Wished, Wanted, Downloaded)** so that **I can quickly find what I need** | 🟡 75% | Original has **two US-012b** — this is the first. Numbering bug in source |
 
-#### AC для US-004 / Audio API (Доступ к аудио):
-1. Платный маршрут (price>0) НЕ куплен → доступны первые 4 аудио (trial)
-2. Платный маршрут куплен → доступны все аудио
-3. Бесплатный маршрут (price=0) → доступны все аудио всем пользователям
-4. Проверка на уровне API по авторизованному JWT
-5. Editor имеет доступ ко всем аудио своих маршрутов без покупки
+#### AC for US-004 / Audio API (Audio Access):
+1. Paid trip (price>0) NOT purchased → first 4 audio files available (trial)
+2. Paid trip purchased → all audio files available
+3. Free trip (price=0) → all audio files available to all users
+4. Verification at API level by authorized JWT
+5. Editor has access to all audio files of their trips without purchase
 
-#### AC для управления ценой (US-004, US-013a):
-1. **Admin** может изменять цену любого маршрута
-2. **Editor** может изменять цену только своих маршрутов
-3. Минимальная цена: нет ограничений (от $0.01)
-4. price=0 — бесплатный маршрут (без trial)
-
----
-
-## 2. Audio Playback
-
-| ID | Role | Story | Confidence | Comment |
-|---|---|---|---|---|
-| **US-006-FE** | User | я хочу **ходить по маршруту с выключенным телефоном и получать автозапуск аудио при достижении точки**, чтобы **не отвлекаться на телефон** | 🟢 90% | — |
-| **US-007-FE** | User | я хочу **управлять воспроизведением (пауза, ±15сек, повтор)**, чтобы **контролировать темп экскурсии** | 🟢 95% | — |
-| **US-008-FE** | User | я хочу **видеть progress bar с возможностью seek**, чтобы **переслушивать интересные части** | 🟢 95% | — |
-| **US-011-FE** | User | я хочу **слышать навигационные подсказки (напр. "поверните налево обойдя фонтан к красному зданию"), плавно прерывающие текущий голос и продолжающие его с момента -2сек после подсказки**, чтобы **не потеряться** | 🟢 90% | — |
-| **US-011b-FE** | User | я хочу **чтобы при входе в новую GPS-зону играл meetsound.mp3; если закончится текущая зона — начать ту, в которую вошли ранее (даже если удалились); если вышли из зоны 2 и перешли в зону 3, то после зоны 1 играет зона 3, а зона 2 = "visited by GPS" (непройдена, но отмечена в базе для ручного прослушивания)**, чтобы **не пропускать точки** | 🟢 90% | — |
-| **US-011c-FE** | User | я хочу **чтобы точки с Δnumber >5 от текущей не проигрывались автоматически при нахождении на линии маршрута**, чтобы **избежать ложных срабатываний на пересечениях** | 🟡 80% | Упущено условие: "не отклонялись от линии маршрута" |
-| **US-011d-FE** | User | я хочу **чтобы пауза отключала GPS, play возобновлял, а выход из зоны без снятия паузы включал GPS**, чтобы **отдохнуть** | 🟡 85% | Добавил уточнение про выход из зоны |
-| **US-022-FE** | User | я хочу **видеть и управлять воспроизведением с lock screen**, чтобы **не разблокировать телефон** | 🟢 90% | Оригинал: "это по умолчанию в iPhone". Ранее US-012b (дубликат) |
+#### AC for price management (US-004, US-013a):
+1. **Admin** can change the price of any trip
+2. **Editor** can change the price only of their own trips
+3. Minimum price: no restrictions (from $0.01)
+4. price=0 — free trip (no trial)
 
 ---
 
-## 3. GPS & Progress Tracking
+## 2. GPS & Progress Tracking
 
 | ID | Role | Story | Confidence | Comment |
 |---|---|---|---|---|
-| **US-011e-FE** | User | я хочу **видеть индикатор режима автопроигрывания (GPS on/off)**, чтобы **контролировать батарею** | 🟡 70% | Оригинал предлагает: "кошка появляется при GPS on" |
-| **US-011f-FE** | User | я хочу **чтобы GPS включался при входе в маршрут и выключался при выходе в список**, чтобы **не беспокоиться о ручном управлении** | 🟢 90% | — |
-| **US-011g-FE** | User | я хочу **чтобы кошка смотрела по направлению верхней части телефона**, чтобы **ориентироваться на местности** | 🟢 95% | — |
-| **US-011h-FE** | User | я хочу **чтобы кошка шла (анимация ходьбы) по направлению движения**, чтобы **ассоциировать её с игровым гидом** | 🟢 95% | — |
-| **US-011i** | User | я хочу **сохранять настройки (персонаж, метрическая система, язык) и синхронизировать между устройствами**, чтобы **не настраивать заново при смене телефона** | 🟢 90% | Backend API required |
-| **US-012a** | User | я хочу **управлять офлайн-кешем (скачивать/удалять), с возможностью повторной загрузки удалённых**, чтобы **освобождать место и использовать офлайн** | 🟡 85% | Оригинал сравнивает с "deleted apps on iPhone" |
-| **US-012c-FE** | User | я хочу **видеть точки разных цветов (фиолетовый/зелёный/синий/оранжевый) и номера**, чтобы **понимать статус прохождения** | 🟢 90% | — |
-| **US-036** | User | я хочу **чтобы прогресс синхронизировался между устройствами и привязывался к locked версии маршрута**, чтобы **продолжить без потери данных** | 🟢 90% | См. AC ниже |
+| **US-011i** | User | I want to **save settings (character, metric system, language) and sync between devices** so that **I don't have to reconfigure when switching phones** | 🟢 90% | Backend API required |
+| **US-012a** | User | I want to **manage offline cache (download/delete), with ability to re-download deleted items** so that **I can free up space and use offline** | 🟡 85% | Original compares to "deleted apps on iPhone" |
+| **US-036** | User | I want **progress to sync between devices and be tied to locked route** so that **I can continue without losing data** | 🟢 90% | See AC below |
 
-#### AC для US-021/US-036 (Version Lock & Sync):
-1. **Version lock:** User остаётся на версии маршрута, с которой начал, до завершения
-2. **Прогресс рассчитывается** на базе locked версии (point_ids этой версии)
-3. **Хранение версий:** unlimited — все версии хранятся вечно
-4. **Cross-device sync:** union merge — объединение completed точек со всех устройств
-5. **Parallel marking:** пользователь может отмечать точки с разных устройств параллельно
+#### AC for US-021/US-036 (Version Lock & Sync):
+1. **Version lock:** User stays on the route (versioned snapshot) they started with until completion
+2. **Progress is calculated** based on locked route (point_ids of that snapshot)
+3. **Version storage:** unlimited — all route snapshots stored forever
+4. **Cross-device sync:** union merge — combining completed points from all devices
+5. **Parallel marking:** user can mark points from different devices in parallel
 6. **Merge strategy:** `merged_completed = device_a.completed ∪ device_b.completed`
-7. **Listen position:** при конфликте берётся max position per point
-8. **Upgrade:** User может добровольно перейти на новую версию (с потерей прогресса)
+7. **Listen position:** on conflict, max position per point is taken
+8. **Upgrade:** User can voluntarily upgrade to new route snapshot (with progress loss)
 
-#### AC для US-011i (Настройки пользователя):
-1. **Персонаж:** выбор м/ж (расширяемо в будущем)
-2. **Метрическая система:** км/мили
-3. **Язык:** интерфейс + аудио предпочтение
-4. **Синхронизация:** настройки привязаны к аккаунту, доступны на всех устройствах
+#### AC for US-011i (User Settings):
+1. **Character:** male/female choice (expandable in future)
+2. **Metric system:** km/miles
+3. **Language:** interface + audio preference
+4. **Sync:** settings tied to account, available on all devices
 5. **API:** GET/PATCH /users/me/settings
-6. **Офлайн:** локальный кеш с sync при подключении
-
-#### Подзадачи US-012с (Acceptance Criteria):
-1. **Старт/Финиш:** первая точка = "Старт", последняя = "Финиш"
-2. **Номера:** каждая точка имеет порядковый номер
-3. **Цвета:**
-   - **Фиолетовые** — не пройдённые (нет GPS, нет ручного запуска)
-   - **Зелёные** — автоматически запущенные по GPS и полностью прослушанные
-   - **Синие** — запущенные вручную, не дослушанные до конца
-   - **Оранжевые** — прослушанные вручную до конца без GPS-нахождения
-4. **Линия маршрута:** меняет цвет на цвет прослушанной точки, если предыдущая точка не фиолетовая
-5. **✅ RESOLVED: GPS_QUEUED state** — решение на стороне frontend (backend хранит состояние `visited_by_gps: bool`)
+6. **Offline:** local cache with sync on connection
 
 ---
 
-## 4. Versioning & Content Lifecycle
+## 3. Versioning & Content Lifecycle
 
 | ID | Role | Story | Confidence | Comment |
 |---|---|---|---|---|
-| **US-021** | User | я хочу **проходить ту версию маршрута, с которой начал, до завершения**, чтобы **прогресс не сломался из-за обновлений** | 🟢 90% | — |
-| **US-033** | Editor | я хочу **работать с draft-версией (JSON в routes.draft_geojson) до публикации**, чтобы **свободно редактировать без влияния на пользователей** | 🟡 85% | Упущены AC: GET/PATCH endpoints, копирование при публикации |
-| **US-037** | Editor | я хочу **исправлять опечатки в опубликованных маршрутах без версионирования (in-place), но получать warning при структурных изменениях**, чтобы **понимать влияние на пользователей** | 🟢 90% | — |
-| **US-052** | Editor | я хочу **просматривать все прошлые опубликованные версии маршрута**, чтобы **понимать историю изменений** | 🟢 90% | Откат запрещён — могут быть активные пользователи на старых версиях |
+| **US-021** | User | I want to **walk the route I started with until completion** so that **my progress doesn't break due to updates** | 🟢 90% | — |
+| **US-033** | Editor | I want to **work with draft version (JSON in routes.draft_geojson) before publishing** so that **I can freely edit without affecting users** | 🟡 85% | Missing AC: GET/PATCH endpoints, copying on publish |
+| **US-037** | Editor | I want to **fix typos in published trips without versioning (in-place), but receive warning on structural changes** so that **I understand the impact on users** | 🟢 90% | — |
+| **US-052** | Editor | I want to **view all past published routes of a trip** so that **I understand the change history** | 🟢 90% | Rollback forbidden — there may be active users on old route snapshots |
 
-#### AC для US-037 (Версионирование при редактировании):
-1. Исправление текста/описания = без новой версии (in-place)
-2. Добавление/удаление точек = создаёт новую версию при ПУБЛИКАЦИИ
-3. Изменение route_index/display_number = без новой версии
-4. ID точек неизменяем (никогда не меняется)
-5. Warning при попытке изменить структуру опубликованного маршрута
-6. **In-place правки применяются ко ВСЕМ версиям** маршрута (включая старые, к которым привязаны пользователи)
+#### AC for US-037 (Versioning on Edit):
+1. Text/description fix = no new version (in-place)
+2. Adding/removing points = creates new version on PUBLISH
+3. Changing trip_index/display_number = no new version
+4. Point IDs are immutable (never change)
+5. Warning when attempting to change structure of published trip
+6. **In-place edits apply to ALL routes** of the trip (including old snapshots that users are tied to)
 
-#### AC для US-033/US-034 (Draft и доступ редактора):
-1. **Draft** — рабочая версия редактора, не видна пользователям
-2. **Published** — создаётся из draft при публикации
-3. Редактор может **сбросить draft** до последней published версии
-4. В мобильном приложении редактор **всегда видит draft-версию** своих маршрутов
-5. **Прогресс редактора сбрасывается** при публикации новой версии
+#### AC for US-033/US-034 (Draft and Editor Access):
+1. **Draft** — editor's working version, not visible to users
+2. **Published** — created from draft on publish
+3. Editor can **reset draft** to last published route
+4. In mobile app, editor **always sees draft version** of their trips
+5. **Editor's progress resets** when new route is published
 
 ---
 
-## 5. Multilingual Content
+## 4. Multilingual Content
 
 | ID | Role | Story | Confidence | Comment |
 |---|---|---|---|---|
-| **US-009-FE** | User | я хочу **чтобы язык интерфейса и аудио по умолчанию = системный**, чтобы **не тратить время на настройку** | 🟢 95% | — |
-| **US-010** | User | я хочу **выбирать язык интерфейса и аудио из 10+ языков**, чтобы **использовать приложение комфортно** | 🟢 95% | — |
-| **US-039** | Editor | я хочу **публиковать языки только при 100% готовности (аудио + перевод)**, чтобы **пользователи не видели неполный контент** | 🟢 90% | — |
-| **US-041** | Editor | я хочу **указывать проектируемые языки и отмечать готовые (languages: {lang: bool})**, чтобы **контролировать видимость** | 🟢 90% | — |
+| **US-010** | User | I want to **choose interface and audio language from 10+ languages** so that **I can use the app comfortably** | 🟢 95% | — |
+| **US-039** | Editor | I want to **publish languages only when 100% ready (audio + translation)** so that **users don't see incomplete content** | 🟢 90% | — |
+| **US-041** | Editor | I want to **specify planned languages and mark ready ones (languages: {lang: bool})** so that **I can control visibility** | 🟢 90% | — |
 
-#### AC для US-039/US-041 (Мультиязычный контент):
-1. Editor добавляет проектируемые языки в draft-версию маршрута
-2. **Готовность языка отмечается в draft:** `languages: {ru: true, en: false}`
-3. При публикации Editor указывает, какие языки доступны пользователям
-4. **Публикация <100% возможна с warning** (soft requirement, не блокировка)
-5. Новые языки добавляются к published версии **in-place** (без создания новой версии)
-6. Язык виден пользователям только если отмечен готовым в опубликованной версии
+#### AC for US-039/US-041 (Multilingual Content):
+1. Editor adds planned languages to draft version of trip
+2. **Language readiness is marked in draft:** `languages: {ru: true, en: false}`
+3. On publish, Editor specifies which languages are available to users
+4. **Publishing <100% is possible with warning** (soft requirement, not blocking)
+5. New languages are added to published route **in-place** (without creating new route snapshot)
+6. Language is visible to users only if marked ready in published route
 
 ---
 
-## 6. Content Creation (Admin Panel)
+## 5. Content Creation (Admin Panel)
 
 | ID | Role | Story | Confidence | Comment |
 |---|---|---|---|---|
-| **US-019** | Editor | я хочу **использовать drag-and-drop конструктор на карте с предпросмотром**, чтобы **легко создавать и сохранять на сервер качественный контент и истории** | 🟢 90% | — |
-| **US-020** | Editor | я хочу **тестировать маршрут в режиме симуляции перед публикацией**, чтобы **проверить логику переходов и навигации** | 🟢 95% | — |
-| **US-031** | Admin | я хочу **управлять правами редакторов (список, назначение/снятие по email, переход к маршрутам)**, чтобы **контролировать доступ** | 🟡 85% | Упущены AC: endpoints, editor видит только свои маршруты |
-| **US-034** | Editor | я хочу **иметь автоматический бесплатный доступ к своим маршрутам**, чтобы **тестировать в приложении без покупки** | 🟢 95% | — |
-| **US-040** | Editor | я хочу **загружать и заменять аудиофайлы (single/batch) с auto-matching по паттерну poi_{seq_no}.mp3**, чтобы **эффективно наполнять маршруты** | 🟢 90% | — |
+| **US-019** | Editor | I want to **use a drag-and-drop constructor on the map with preview** so that **I can easily create and save quality content and stories to server** | 🟢 90% | — |
+| **US-020** | Editor | I want to **test the trip in simulation mode before publishing** so that **I can verify transition and navigation logic** | 🟢 95% | — |
+| **US-031** | Admin | I want to **manage editor permissions (list, assign/revoke by email, navigate to trips)** so that **I can control access** | 🟡 85% | Missing AC: endpoints, editor sees only their trips |
+| **US-034** | Editor | I want to **have automatic free access to my trips** so that **I can test in the app without purchasing** | 🟢 95% | — |
+| **US-040** | Editor | I want to **upload and replace audio files (single/batch) with auto-matching by pattern poi_{seq_no}.mp3** so that **I can efficiently populate trips** | 🟢 90% | — |
 
-#### AC для US-031 (Управление правами редакторов):
-1. **Создание Admin:** вручную в базе данных (SQL), нет UI
-2. **При снятии прав редактора:**
-   - **Published маршруты** остаются лайв, доступны пользователям
-   - Редактор теряет доступ к редактированию своих маршрутов
-   - **Draft маршруты** сохраняются в базе (не удаляются)
-   - Admin может назначить другого редактора на эти маршруты
-3. **При восстановлении прав:**
-   - Маршруты **НЕ привязываются автоматически** к редактору
-   - Admin должен **вручную переназначить** маршруты редактору
-4. Editor видит только свои маршруты в админ-панели
+#### AC for US-031 (Editor Permission Management):
+1. **Admin creation:** manually in database (SQL), no UI
+2. **On revoking editor rights:**
+   - **Published trips** remain live, available to users
+   - Editor loses access to edit their trips
+   - **Draft trips** are preserved in database (not deleted)
+   - Admin can assign another editor to these trips
+3. **On restoring rights:**
+   - Trips are **NOT automatically re-assigned** to editor
+   - Admin must **manually reassign** trips to editor
+4. Editor sees only their trips in admin panel
 
 ---
 
-## 7. Monetization & Auth
+## 6. Monetization & Auth
 
 | ID | Role | Story | Confidence | Comment |
 |---|---|---|---|---|
-| **US-013a** | User | я хочу **бесплатно прослушать первые 4 точки на каждом платном маршруте**, чтобы **попробовать сервис без обязательств** | 🟢 95% | См. AC ниже |
-| **US-013b** | User | я хочу **покупать отдельные маршруты с нужным языком ($3-$8) через in-app purchase**, чтобы **платить только за нужное** | 🟢 90% | — |
-| **US-015** | User | я хочу **быструю бесшовную авторизацию по email при запуске**, чтобы **не терять покупки при смене телефона** | 🟢 90% | — |
-| **US-042** | User | я хочу **покупать бандлы (наборы маршрутов) со скидкой**, чтобы **экономить при покупке нескольких маршрутов** | 🟢 90% | После покупки бандла — карточка исчезает, появляются отдельные маршруты |
-| **US-043** | Admin | я хочу **создавать и управлять бандлами (выбор маршрутов, установка цены и скидки)**, чтобы **предлагать выгодные наборы пользователям** | 🟢 90% | Маршруты из бандла можно купить и отдельно |
+| **US-013a** | User | I want to **listen to the first 4 points free on each paid trip** so that **I can try the service without commitment** | 🟢 95% | See AC below |
+| **US-013b** | User | I want to **purchase individual trips with desired language ($3-$8) via in-app purchase** so that **I only pay for what I need** | 🟢 90% | — |
+| **US-015** | User | I want **fast seamless email authorization on launch** so that **I don't lose purchases when switching phones** | 🟢 90% | — |
+| **US-042** | User | I want to **purchase bundles (trip collections) with a discount** so that **I save when buying multiple trips** | 🟢 90% | After bundle purchase — card disappears, individual trips appear |
+| **US-043** | Admin | I want to **create and manage bundles (select trips, set price and discount)** so that **I can offer advantageous collections to users** | 🟢 90% | Trips from bundle can be purchased separately too |
 
-#### AC для US-013a (Trial — определение "точки"):
-1. **"Точка" = POI entity** по `route_index`, независимо от наличия аудио
-2. **Trial = первые 4 POI** отсортированные по `route_index`
-3. Если маршрут имеет <4 POI → все доступны в trial
-4. POI без аудио на языке пользователя → показать text description
-5. Глобальная конфигурация: 4 точки для всех платных маршрутов
+#### AC for US-013a (Trial — definition of "point"):
+1. **"Point" = POI entity** by `trip_index`, regardless of audio presence
+2. **Trial = first 4 POI** sorted by `trip_index`
+3. If trip has <4 POI → all are available in trial
+4. POI without audio in user's language → show text description
+5. Global configuration: 4 points for all paid trips
 
-#### AC для US-015 (Magic Link авторизация):
-1. **Link expiry:** 15 минут
-2. **Resend:** кнопка "Отправить повторно" доступна через 60 секунд
-3. **Rate limit:** max 5 попыток в час на email
-4. **Multi-device:** link работает на любом устройстве (не привязан к requesting device)
+#### AC for US-015 (Magic Link Authorization):
+1. **Link expiry:** 15 minutes
+2. **Resend:** "Resend" button available after 60 seconds
+3. **Rate limit:** max 5 attempts per hour per email
+4. **Multi-device:** link works on any device (not tied to requesting device)
 5. **Error messages:**
-   - `EMAIL_NOT_FOUND`: "Email не найден. Проверьте или зарегистрируйтесь"
-   - `RATE_LIMITED`: "Слишком много попыток. Подождите 10 минут"
-   - `LINK_EXPIRED`: "Ссылка устарела" + кнопка resend
+   - `EMAIL_NOT_FOUND`: "Email not found. Please verify or register"
+   - `RATE_LIMITED`: "Too many attempts. Please wait 10 minutes"
+   - `LINK_EXPIRED`: "Link expired" + resend button
 
-#### AC для US-042/US-043 (Бандлы):
-1. **После покупки бандла** все маршруты из бандла доступны пользователю **навсегда** — как если бы он купил их отдельно
-2. Для маршрутов из купленного бандла отображается кнопка **"Start"** вместо "Buy"
-3. Маршруты из бандла можно купить отдельно (до покупки бандла)
-4. **✅ RESOLVED: Partial ownership** — скрыть бандл если пользователь владеет любым маршрутом из него
-5. Пользователь может купить оставшиеся маршруты только по отдельности
+#### AC for US-042/US-043 (Bundles):
+1. **After bundle purchase** all trips from bundle are available to user **forever** — as if purchased separately
+2. For trips from purchased bundle, **"Start"** button is displayed instead of "Buy"
+3. Trips from bundle can be purchased separately (before bundle purchase)
+4. **RESOLVED: Partial ownership** — hide bundle if user owns any trip from it
+5. User can purchase remaining trips only separately
 
 ---
 
-## 8. Gamification
+## 7. Gamification
 
 | ID | Role | Story | Confidence | Comment |
 |---|---|---|---|---|
-| **US-025** | User | я хочу **получить достижение "Первые шаги" за завершение первого маршрута по GPS**, чтобы **почувствовать начало путешествия** | 🟢 90% | — |
-| **US-026** | User | я хочу **получать достижения за маршруты >90%: "Любопытный"(5), "Исследователь"(15), "Путешественник"(30), "Номад"(50), "Легенда дорог"(100)**, чтобы **иметь мотивацию** | 🟢 90% | — |
-| **US-027** | User | я хочу **получать достижения за города: "Турист"(3), "Космополит"(10), "Гражданин мира"(25), "Коллекционер городов"(50)**, чтобы **коллекционировать** | 🟢 90% | — |
-| **US-028** | User | я хочу **получать достижение "Полностью исследован" за 100% прохождение маршрута**, чтобы **стремиться к полному исследованию** | 🟢 90% | — |
+| **US-025** | User | I want to **get "First Steps" achievement for completing my first trip by GPS** so that **I feel the journey beginning** | 🟢 90% | — |
+| **US-026** | User | I want to **get achievements for trips >90%: "Curious"(5), "Explorer"(15), "Traveler"(30), "Nomad"(50), "Road Legend"(100)** so that **I have motivation** | 🟢 90% | — |
+| **US-027** | User | I want to **get achievements for cities: "Tourist"(3), "Cosmopolitan"(10), "World Citizen"(25), "City Collector"(50)** so that **I can collect** | 🟢 90% | — |
+| **US-028** | User | I want to **get "Fully Explored" achievement for 100% trip completion** so that **I strive for complete exploration** | 🟢 90% | — |
 
-#### AC для US-025..028 (Achievements):
-1. **Immutable:** достижения никогда не отзываются (once earned = forever)
-2. **Once per route:** один маршрут = один completion (повторное прохождение не увеличивает счётчик)
-3. **Snapshot:** при completion сохраняется `city_at_completion` (если маршрут переместят в другой город)
-4. **Grandfathered routes count:** маршруты с grandfathered доступом учитываются в достижениях
-5. **Trial completions:** прохождение только trial (4 точки) НЕ учитывается в достижениях
-6. **Offline resilience:** completion сохраняется локально, sync при подключении
-7. **Deleted routes:** если маршрут удалён после completion — достижение сохраняется
+#### AC for US-025..028 (Achievements):
+1. **Immutable:** achievements are never revoked (once earned = forever)
+2. **Once per trip:** one trip = one completion (repeat playthrough doesn't increase counter)
+3. **Snapshot:** on completion, `city_at_completion` is saved (if trip is moved to another city)
+4. **Grandfathered trips count:** trips with grandfathered access count toward achievements
+5. **Trial completions:** completing only trial (4 points) does NOT count toward achievements
+6. **Offline resilience:** completion is saved locally, sync on connection
+7. **Deleted trips:** if trip is deleted after completion — achievement is preserved
 
 ---
 
-## 9. Analytics & Marketing
+## 8. Analytics & Marketing
 
 | ID | Role | Story | Confidence | Comment |
 |---|---|---|---|---|
-| **US-016-FE** | Admin | я хочу **показывать 1000 городов с надписью "в разработке" и подпиской на уведомление**, чтобы **создать иллюзию большого каталога и измерить спрос** | 🟢 90% | Реклама таргетируется на города где есть маршруты |
-| **US-017** | Admin | я хочу **видеть детальную аналитику (время в точках, переходы, выходы, клики) через Firebase**, чтобы **улучшать продукт** | 🟢 90% | LA-story (analytics) |
-| **US-017b-FE** | Admin | я хочу **захватывать click_id и UTM при установке через Firebase Dynamic Links (Deferred Deep Link)**, чтобы **атрибутировать установки к кампаниям Instagram/TikTok** | 🟢 90% | — |
-| **US-030** | User | я хочу **получать push/email при появлении маршрута из wishlist**, чтобы **узнать о новом контенте** | 🟢 90% | — |
+| **US-017** | Admin | I want to **see detailed analytics (time in points, transitions, exits, clicks) via Firebase** so that **I can improve the product** | 🟢 90% | LA-story (analytics) |
+| **US-030** | User | I want to **receive push/email when a trip from wishlist appears** so that **I learn about new content** | 🟢 90% | — |
 
 ---
 
-## 10. Legal & UX
-
-| ID | Role | Story | Confidence | Comment |
-|---|---|---|---|---|
-| **US-014-FE** | User | я хочу **иметь доступ к Terms of Use и Privacy Policy из приложения**, чтобы **понимать правовые аспекты** | 🟢 95% | — |
-| **US-018-FE** | User | я хочу **чтобы UX был на уровне, когда я не задумываюсь о неудобствах**, чтобы **комфортно пользоваться** | 🟢 90% | Meta-story про качество UX |
-
----
-
-## Сводка по Confidence
+## Confidence Summary
 
 | Confidence | Count | % |
 |---|---|---|
-| 🟢 90-100% | 39 | 81% |
-| 🟡 70-89% | 9 | 19% |
+| 🟢 90-100% | 23 | 79% |
+| 🟡 70-89% | 6 | 21% |
 | 🟠 50-69% | 0 | 0% |
 | 🔴 <50% | 0 | 0% |
 
 ---
 
-## Проблемные stories (требуют внимания)
+## Problematic Stories (require attention)
 
 | ID | Issue |
 |---|---|
-| 🟡 **US-012b** | Дублируется в оригинале — второй story переименован в US-022 |
-| 🟡 **US-011c-FE** | Упущено условие: "не отклонялись от линии маршрута" |
-| 🟡 **US-011d-FE** | Добавлено уточнение про выход из зоны |
-| 🟡 **US-011e-FE** | Возможная реализация: "кошка появляется при GPS on" |
+| 🟡 **US-012b** | Duplicated in original — second story renamed to US-022 |
 
 ---
 
-## Сводка по ролям
+## Role Summary
 
 | Role | User Stories |
 |---|---|
-| User | US-001..012, US-021, US-022, US-025..028, US-030, US-036, US-042 |
+| User | US-001..004, US-010..013, US-021, US-025..028, US-030, US-036, US-042 |
 | Editor | US-019, US-020, US-033, US-034, US-037, US-039..041, US-052 |
-| Admin | US-016, US-017, US-017b, US-031, US-043 |
+| Admin | US-017, US-031, US-043 |
 | System | — |
 
 ---
 
-## Источники
-
-- `docs/user-stories.md` — оригинальные user stories
-- `docs/business-rules.md` — бизнес-правила (BR-001..BR-027)
-- `docs/ROUTE_VERSIONING_CONVERSATION.md` — обсуждение версионирования
-
----
 
 ## Technical Implementation Notes (Backend)
 
-Решения, делегированные на frontend (backend только хранит state):
-- **Skip Δ5 logic:** FE определяет когда пропускать auto-play; backend API marks `visited`/`listened`
-- **Teleport handling:** FE решает что делать с пропущенными точками
-- **GPS unavailable:** FE fallback to manual mode; backend не зависит от GPS
-- **Offline download resume:** FE решает resume vs restart
-- **GPS_QUEUED color:** FE выбирает визуализацию; backend хранит `visited_by_gps: bool`
+Decisions delegated to frontend (backend only stores state):
+- **Skip delta 5 logic:** FE determines when to skip auto-play; backend API marks `visited`/`listened`
+- **Teleport handling:** FE decides what to do with skipped points
+- **GPS unavailable:** FE fallback to manual mode; backend doesn't depend on GPS
+- **Offline download resume:** FE decides resume vs restart
+- **GPS_QUEUED color:** FE chooses visualization; backend stores `visited_by_gps: bool`
 
 ---
 
-*Generated: 2025-12-30 | Conflicts resolved: 2025-12-30 | Updated: 2025-12-30 (spec-panel review, resolved OPEN issues)*
+*Generated: 2025-12-30 | Updated: 2025-12-31 (FE stories moved to _user-stories-frontend.md)*

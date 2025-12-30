@@ -3,9 +3,9 @@ from fastapi import APIRouter, Depends, Query, status, HTTPException
 
 from app.routes.dependencies import RouteServiceDep, CurrentUserOptional, CurrentUser
 from app.routes.schemas import (
-    RouteListResponse, RouteDetailResponse, CheckpointProgressResponse,
-    UserActiveRouteResponse, MarkVisitedRequest, UpdateAudioStatusRequest,
-    RouteListItem, UserRouteProgress
+    TripListResponse, TripDetailResponse, CheckpointProgressResponse,
+    UserActiveTripResponse, MarkVisitedRequest, UpdateAudioStatusRequest,
+    TripListItem, UserTripProgress
 )
 
 router = APIRouter()
@@ -13,15 +13,15 @@ router = APIRouter()
 
 # ========== Phase 1: Read Endpoints ==========
 
-@router.get("", response_model=RouteListResponse)
-def list_routes(
+@router.get("", response_model=TripListResponse)
+def list_trips(
     route_service: RouteServiceDep,
     current_user: CurrentUserOptional,
     city_id: int | None = Query(None, description="Filter by city geonameid"),
     lat: float | None = Query(None, ge=-90, le=90, description="User latitude for nearby filter"),
     lon: float | None = Query(None, ge=-180, le=180, description="User longitude for nearby filter"),
     nearby_km: float = Query(50.0, ge=1, le=500, description="Radius in km for nearby search"),
-    status: list[str] | None = Query(None, description="Filter by route status"),
+    status: list[str] | None = Query(None, description="Filter by trip status"),
     search: str | None = Query(None, min_length=2, max_length=100, description="Search in title and description"),
     wished: bool | None = Query(None, description="Filter by wished status (requires auth)"),
     lang: str = Query("en", description="Language for i18n content"),
@@ -29,17 +29,17 @@ def list_routes(
     offset: int = Query(0, ge=0, description="Pagination offset"),
 ):
     """
-    List available routes with optional filters.
+    List available trips with optional filters.
 
-    - **city_id**: Filter routes by city
-    - **lat/lon**: Filter routes near user location (uses first checkpoint)
-    - **search**: Search in route titles and descriptions
-    - **status**: Filter by route status (published, coming_soon, etc)
+    - **city_id**: Filter trips by city
+    - **lat/lon**: Filter trips near user location (uses first checkpoint)
+    - **search**: Search in trip titles and descriptions
+    - **status**: Filter by trip status (published, coming_soon, etc)
     - **wished**: Filter by user's wished status (true=only wished, false=exclude wished)
     - **lang**: Language for titles and descriptions
     """
     user_id = current_user.id if current_user else None
-    return route_service.list_routes(
+    return route_service.list_trips(
         user_id=user_id,
         city_id=city_id,
         lat=lat,
@@ -54,41 +54,41 @@ def list_routes(
     )
 
 
-@router.get("/{route_id}", response_model=RouteDetailResponse)
-def get_route(
-    route_id: UUID,
+@router.get("/{trip_id}", response_model=TripDetailResponse)
+def get_trip(
+    trip_id: UUID,
     route_service: RouteServiceDep,
     current_user: CurrentUserOptional,
     lang: str = Query("en", description="Language for i18n content"),
 ):
     """
-    Get detailed route information including current published version.
+    Get detailed trip information including current published route.
 
-    Returns 404 if route not found or not published.
+    Returns 404 if trip not found or not published.
     """
     user_id = current_user.id if current_user else None
-    result = route_service.get_route_detail(route_id, user_id=user_id, lang=lang)
+    result = route_service.get_trip_detail(trip_id, user_id=user_id, lang=lang)
     if not result:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Route not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
     return result
 
 
-@router.get("/{route_id}/checkpoints", response_model=list[CheckpointProgressResponse])
-def get_route_checkpoints(
-    route_id: UUID,
+@router.get("/{trip_id}/checkpoints", response_model=list[CheckpointProgressResponse])
+def get_trip_checkpoints(
+    trip_id: UUID,
     route_service: RouteServiceDep,
     current_user: CurrentUserOptional,
     lang: str = Query("en", description="Language for i18n content"),
 ):
     """
-    Get all checkpoints for a route.
+    Get all checkpoints for a trip.
 
-    If user has an active session, returns checkpoints from the locked version.
-    Otherwise returns checkpoints from current published version.
+    If user has an active session, returns checkpoints from the locked route.
+    Otherwise returns checkpoints from current published route.
     Includes user progress if authenticated.
     """
     user_id = current_user.id if current_user else None
-    return route_service.get_route_checkpoints(route_id, user_id=user_id, lang=lang)
+    return route_service.get_trip_checkpoints(trip_id, user_id=user_id, lang=lang)
 
 
 # ========== Phase 2: User Progress Endpoints ==========
@@ -152,71 +152,71 @@ def update_audio_status(
     return result
 
 
-@router.get("/me/routes", response_model=list[UserActiveRouteResponse])
-def get_my_routes(
+@router.get("/me/trips", response_model=list[UserActiveTripResponse])
+def get_my_trips(
     route_service: RouteServiceDep,
     current_user: CurrentUser,
     lang: str = Query("en", description="Language for i18n content"),
 ):
     """
-    Get user's active route sessions with progress.
+    Get user's active trip sessions with progress.
 
-    Returns all routes the user has started (both in-progress and completed).
-    Each route includes progress information (checkpoints visited, audio completed, etc).
+    Returns all trips the user has started (both in-progress and completed).
+    Each trip includes progress information (checkpoints visited, audio completed, etc).
     """
-    return route_service.get_user_active_routes(
+    return route_service.get_user_active_trips(
         user_id=current_user.id,
         lang=lang
     )
 
 
 @router.post(
-    "/{route_id}/start",
-    response_model=UserActiveRouteResponse,
+    "/{trip_id}/start",
+    response_model=UserActiveTripResponse,
     status_code=status.HTTP_201_CREATED
 )
-def start_route(
-    route_id: UUID,
+def start_trip(
+    trip_id: UUID,
     route_service: RouteServiceDep,
     current_user: CurrentUser,
 ):
     """
-    Start a route session.
+    Start a trip session.
 
-    Locks the user to the current published version of the route.
+    Locks the user to the current published route of the trip.
     If already started, returns existing session (idempotent).
     """
-    result = route_service.start_route(
+    result = route_service.start_trip(
         user_id=current_user.id,
-        route_id=route_id
+        trip_id=trip_id
     )
     if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Route not found or not published"
+            detail="Trip not found or not published"
         )
     return result
 
 
-@router.post("/{route_id}/finish", response_model=UserActiveRouteResponse)
-def finish_route(
-    route_id: UUID,
+@router.post("/{trip_id}/finish", response_model=UserActiveTripResponse)
+def finish_trip(
+    trip_id: UUID,
     route_service: RouteServiceDep,
     current_user: CurrentUser,
 ):
     """
-    Manually finish a route.
+    Manually finish a trip.
 
-    Marks the route as completed with completion_type='manual'.
-    Returns 404 if no active session exists for this route.
+    Marks the trip as completed with completion_type='manual'.
+    Returns 404 if no active session exists for this trip.
     """
-    result = route_service.finish_route(
+    result = route_service.finish_trip(
         user_id=current_user.id,
-        route_id=route_id
+        trip_id=trip_id
     )
     if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No active session for this route"
+            detail="No active session for this trip"
         )
     return result

@@ -7,8 +7,8 @@ from geoalchemy2.shape import to_shape, from_shape
 from shapely.geometry import LineString, Point, shape
 
 from app.routes.models import (
-    Route, RouteVersion, Checkpoint, VisitedPoint, UserActiveRoute,
-    RouteStatus, RouteVersionStatus, AudioListenStatus, CompletionType
+    Trip, Route, Checkpoint, VisitedPoint, UserActiveTrip,
+    TripStatus, RouteStatus, AudioListenStatus, CompletionType
 )
 from app.cities.models import City
 
@@ -25,11 +25,11 @@ class RouteService:
             return ""
         return hstore.get(lang) or hstore.get(fallback) or next(iter(hstore.values()), "")
 
-    def _calculate_user_progress(self, user_id: int, route_version_id: UUID) -> dict:
-        """Calculate user's progress on a route version"""
+    def _calculate_user_progress(self, user_id: int, route_id: UUID) -> dict:
+        """Calculate user's progress on a route"""
         # Count total visible checkpoints
         total = self.db.query(func.count(Checkpoint.id)).filter(
-            Checkpoint.route_version_id == route_version_id,
+            Checkpoint.route_id == route_id,
             Checkpoint.is_visible == True
         ).scalar() or 0
 
@@ -38,7 +38,7 @@ class RouteService:
             Checkpoint, VisitedPoint.checkpoint_id == Checkpoint.id
         ).filter(
             VisitedPoint.user_id == user_id,
-            Checkpoint.route_version_id == route_version_id,
+            Checkpoint.route_id == route_id,
             VisitedPoint.visited == True
         ).scalar() or 0
 
@@ -47,7 +47,7 @@ class RouteService:
             Checkpoint, VisitedPoint.checkpoint_id == Checkpoint.id
         ).filter(
             VisitedPoint.user_id == user_id,
-            Checkpoint.route_version_id == route_version_id,
+            Checkpoint.route_id == route_id,
             VisitedPoint.audio_status == AudioListenStatus.COMPLETED
         ).scalar() or 0
 
@@ -60,20 +60,20 @@ class RouteService:
             "progress_percent": round(progress_pct, 1)
         }
 
-    def _check_automatic_completion(self, user_id: int, route_id: UUID) -> bool:
+    def _check_automatic_completion(self, user_id: int, trip_id: UUID) -> bool:
         """Check if all checkpoints done and auto-complete if so"""
         # Get user's active session
-        session = self.db.query(UserActiveRoute).filter(
-            UserActiveRoute.user_id == user_id,
-            UserActiveRoute.route_id == route_id,
-            UserActiveRoute.completed_at == None
+        session = self.db.query(UserActiveTrip).filter(
+            UserActiveTrip.user_id == user_id,
+            UserActiveTrip.trip_id == trip_id,
+            UserActiveTrip.completed_at == None
         ).first()
 
         if not session:
             return False
 
         # Get progress
-        progress = self._calculate_user_progress(user_id, session.locked_version_id)
+        progress = self._calculate_user_progress(user_id, session.locked_route_id)
 
         # If all audio completed, mark as auto-completed
         if progress["audio_completed"] >= progress["checkpoints_total"] and progress["checkpoints_total"] > 0:
@@ -86,7 +86,7 @@ class RouteService:
 
     # ========== Read Operations ==========
 
-    def list_routes(
+    def list_trips(
         self,
         user_id: int | None = None,
         city_id: int | None = None,
@@ -100,37 +100,37 @@ class RouteService:
         offset: int = 0,
         lang: str = "en"
     ) -> dict:
-        """List routes with filters"""
-        # Base query: published routes with their published versions
-        query = self.db.query(Route).join(
-            RouteVersion, Route.published_version_id == RouteVersion.id
-        ).filter(Route.status == RouteStatus.PUBLISHED)
+        """List trips with filters"""
+        # Base query: published trips with their published routes
+        query = self.db.query(Trip).join(
+            Route, Trip.published_route_id == Route.id
+        ).filter(Trip.status == TripStatus.PUBLISHED)
 
         # Filter by city
         if city_id:
-            query = query.filter(Route.city_id == city_id)
+            query = query.filter(Trip.city_id == city_id)
 
         # Filter by status
         if status_filter:
-            statuses = [RouteStatus(s) for s in status_filter if s in RouteStatus.__members__.values()]
+            statuses = [TripStatus(s) for s in status_filter if s in TripStatus.__members__.values()]
             if statuses:
-                query = query.filter(Route.status.in_(statuses))
+                query = query.filter(Trip.status.in_(statuses))
 
         # Filter by search query in title/summary for specified language
         if search:
             search_pattern = f"%{search.lower()}%"
             query = query.filter(
                 or_(
-                    func.lower(RouteVersion.title_i18n[lang]).ilike(search_pattern),
-                    func.lower(RouteVersion.summary_i18n[lang]).ilike(search_pattern)
+                    func.lower(Route.title_i18n[lang]).ilike(search_pattern),
+                    func.lower(Route.summary_i18n[lang]).ilike(search_pattern)
                 )
             )
 
         # Nearby filter using first checkpoint location (seq_no=0)
         if lat is not None and lon is not None:
-            # Subquery to get first checkpoint (seq_no=0) of each published version
+            # Subquery to get first checkpoint (seq_no=0) of each published route
             first_checkpoint_sq = self.db.query(
-                Checkpoint.route_version_id,
+                Checkpoint.route_id,
                 Checkpoint.location
             ).filter(
                 Checkpoint.seq_no == 0
@@ -145,7 +145,7 @@ class RouteService:
             # Join with first checkpoints and filter by distance
             query = query.join(
                 first_checkpoint_sq,
-                RouteVersion.id == first_checkpoint_sq.c.route_version_id
+                Route.id == first_checkpoint_sq.c.route_id
             ).filter(
                 ST_DWithin(
                     first_checkpoint_sq.c.location,
@@ -158,35 +158,35 @@ class RouteService:
         if wished is not None and user_id:
             from app.wishes.models import WishedRoute
             if wished:
-                # Only routes user has wished
+                # Only trips user has wished
                 query = query.join(
                     WishedRoute,
                     and_(
-                        WishedRoute.route_id == Route.id,
+                        WishedRoute.route_id == Trip.id,
                         WishedRoute.user_id == user_id,
                         WishedRoute.is_active == True  # noqa: E712
                     )
                 )
             else:
-                # Exclude routes user has wished
+                # Exclude trips user has wished
                 wished_subq = self.db.query(WishedRoute.route_id).filter(
                     WishedRoute.user_id == user_id,
                     WishedRoute.is_active == True  # noqa: E712
                 ).subquery()
-                query = query.filter(~Route.id.in_(select(wished_subq)))
+                query = query.filter(~Trip.id.in_(select(wished_subq)))
 
         count = query.count()
-        routes = query.offset(offset).limit(limit).all()
+        trips = query.offset(offset).limit(limit).all()
 
-        if not routes:
-            return {"count": count, "routes": []}
+        if not trips:
+            return {"count": count, "trips": []}
 
         # Batch fetch related data to avoid N+1 queries
-        route_ids = [r.id for r in routes]
-        version_ids = [r.published_version_id for r in routes]
+        trip_ids = [t.id for t in trips]
+        route_ids = [t.published_route_id for t in trips]
 
         # Batch fetch cities
-        city_ids = [r.city_id for r in routes]
+        city_ids = [t.city_id for t in trips]
         cities = {
             c.geonameid: c
             for c in self.db.query(City).filter(City.geonameid.in_(city_ids)).all()
@@ -194,59 +194,59 @@ class RouteService:
 
         # Batch fetch checkpoint counts
         checkpoint_counts = dict(
-            self.db.query(Checkpoint.route_version_id, func.count(Checkpoint.id))
+            self.db.query(Checkpoint.route_id, func.count(Checkpoint.id))
             .filter(
-                Checkpoint.route_version_id.in_(version_ids),
+                Checkpoint.route_id.in_(route_ids),
                 Checkpoint.is_visible == True  # noqa: E712
             )
-            .group_by(Checkpoint.route_version_id)
+            .group_by(Checkpoint.route_id)
             .all()
         )
 
         # Batch fetch wish statuses for user
-        wished_route_ids = set()
+        wished_trip_ids = set()
         if user_id:
             from app.wishes.models import WishedRoute
-            wished_route_ids = {
+            wished_trip_ids = {
                 r.route_id for r in self.db.query(WishedRoute.route_id).filter(
                     WishedRoute.user_id == user_id,
-                    WishedRoute.route_id.in_(route_ids),
+                    WishedRoute.route_id.in_(trip_ids),
                     WishedRoute.is_active == True  # noqa: E712
                 ).all()
             }
 
-        # Batch fetch active routes for user
-        active_routes = {}
+        # Batch fetch active trips for user
+        active_trips = {}
         if user_id:
-            active_routes = {
-                ar.route_id: ar for ar in self.db.query(UserActiveRoute).filter(
-                    UserActiveRoute.user_id == user_id,
-                    UserActiveRoute.route_id.in_(route_ids)
+            active_trips = {
+                at.trip_id: at for at in self.db.query(UserActiveTrip).filter(
+                    UserActiveTrip.user_id == user_id,
+                    UserActiveTrip.trip_id.in_(trip_ids)
                 ).all()
             }
 
         result = []
-        for route in routes:
-            version = route.published_version
-            city = cities.get(route.city_id)
-            checkpoint_count = checkpoint_counts.get(version.id, 0)
-            is_wished = route.id in wished_route_ids
+        for trip in trips:
+            route = trip.published_route
+            city = cities.get(trip.city_id)
+            checkpoint_count = checkpoint_counts.get(route.id, 0)
+            is_wished = trip.id in wished_trip_ids
 
             item = {
-                "id": route.id,
-                "slug": route.slug,
-                "status": route.status.value,
-                "title": self._resolve_i18n(version.title_i18n, lang),
-                "summary": self._resolve_i18n(version.summary_i18n, lang) if version.summary_i18n else None,
-                "duration_min": version.duration_min,
-                "distance_m": version.distance_m,
-                "ascent_m": version.ascent_m,
-                "descent_m": version.descent_m,
-                "languages": version.languages or [],
-                "free_checkpoint_limit": version.free_checkpoint_limit,
-                "price_amount": version.price_amount,
-                "price_currency": version.price_currency,
-                "city_id": route.city_id,
+                "id": trip.id,
+                "slug": trip.slug,
+                "status": trip.status.value,
+                "title": self._resolve_i18n(route.title_i18n, lang),
+                "summary": self._resolve_i18n(route.summary_i18n, lang) if route.summary_i18n else None,
+                "duration_min": route.duration_min,
+                "distance_m": route.distance_m,
+                "ascent_m": route.ascent_m,
+                "descent_m": route.descent_m,
+                "languages": route.languages or [],
+                "free_checkpoint_limit": route.free_checkpoint_limit,
+                "price_amount": route.price_amount,
+                "price_currency": route.price_currency,
+                "city_id": trip.city_id,
                 "city_name": city.name if city else "",
                 "checkpoint_count": checkpoint_count,
                 "user_progress": None,
@@ -255,9 +255,9 @@ class RouteService:
 
             # Add user progress if authenticated
             if user_id:
-                active = active_routes.get(route.id)
+                active = active_trips.get(trip.id)
                 if active:
-                    progress = self._calculate_user_progress(user_id, active.locked_version_id)
+                    progress = self._calculate_user_progress(user_id, active.locked_route_id)
                     item["user_progress"] = {
                         "started_at": active.started_at,
                         "completed_at": active.completed_at,
@@ -267,54 +267,54 @@ class RouteService:
 
             result.append(item)
 
-        return {"count": count, "routes": result}
+        return {"count": count, "trips": result}
 
-    def get_route_detail(self, route_id: UUID, user_id: int | None = None, lang: str = "en") -> dict | None:
-        """Get full route details"""
-        route = self.db.query(Route).filter(Route.id == route_id).first()
-        if not route or not route.published_version_id:
+    def get_trip_detail(self, trip_id: UUID, user_id: int | None = None, lang: str = "en") -> dict | None:
+        """Get full trip details"""
+        trip = self.db.query(Trip).filter(Trip.id == trip_id).first()
+        if not trip or not trip.published_route_id:
             return None
 
-        version = route.published_version
-        city = self.db.query(City).filter(City.geonameid == route.city_id).first()
+        route = trip.published_route
+        city = self.db.query(City).filter(City.geonameid == trip.city_id).first()
 
         checkpoint_count = self.db.query(func.count(Checkpoint.id)).filter(
-            Checkpoint.route_version_id == version.id,
+            Checkpoint.route_id == route.id,
             Checkpoint.is_visible == True
         ).scalar() or 0
 
         result = {
-            "id": route.id,
-            "slug": route.slug,
-            "status": route.status.value,
-            "city_id": route.city_id,
+            "id": trip.id,
+            "slug": trip.slug,
+            "status": trip.status.value,
+            "city_id": trip.city_id,
             "city_name": city.name if city else "",
-            "version_id": version.id,
-            "version_no": version.version_no,
-            "title": self._resolve_i18n(version.title_i18n, lang),
-            "summary": self._resolve_i18n(version.summary_i18n, lang) if version.summary_i18n else None,
-            "languages": version.languages or [],
-            "duration_min": version.duration_min,
-            "distance_m": version.distance_m,
-            "ascent_m": version.ascent_m,
-            "descent_m": version.descent_m,
-            "geojson": version.geojson,
-            "free_checkpoint_limit": version.free_checkpoint_limit,
-            "price_amount": version.price_amount,
-            "price_currency": version.price_currency,
+            "route_id": route.id,
+            "version_no": route.version_no,
+            "title": self._resolve_i18n(route.title_i18n, lang),
+            "summary": self._resolve_i18n(route.summary_i18n, lang) if route.summary_i18n else None,
+            "languages": route.languages or [],
+            "duration_min": route.duration_min,
+            "distance_m": route.distance_m,
+            "ascent_m": route.ascent_m,
+            "descent_m": route.descent_m,
+            "geojson": route.geojson,
+            "free_checkpoint_limit": route.free_checkpoint_limit,
+            "price_amount": route.price_amount,
+            "price_currency": route.price_currency,
             "checkpoint_count": checkpoint_count,
-            "created_at": route.created_at,
-            "published_at": version.published_at,
+            "created_at": trip.created_at,
+            "published_at": route.published_at,
             "user_progress": None
         }
 
         if user_id:
-            active = self.db.query(UserActiveRoute).filter(
-                UserActiveRoute.user_id == user_id,
-                UserActiveRoute.route_id == route.id
+            active = self.db.query(UserActiveTrip).filter(
+                UserActiveTrip.user_id == user_id,
+                UserActiveTrip.trip_id == trip.id
             ).first()
             if active:
-                progress = self._calculate_user_progress(user_id, active.locked_version_id)
+                progress = self._calculate_user_progress(user_id, active.locked_route_id)
                 result["user_progress"] = {
                     "started_at": active.started_at,
                     "completed_at": active.completed_at,
@@ -324,30 +324,30 @@ class RouteService:
 
         return result
 
-    def get_route_checkpoints(
+    def get_trip_checkpoints(
         self,
-        route_id: UUID,
+        trip_id: UUID,
         user_id: int | None = None,
         lang: str = "en"
     ) -> list[dict]:
-        """Get checkpoints for a route"""
-        route = self.db.query(Route).filter(Route.id == route_id).first()
-        if not route or not route.published_version_id:
+        """Get checkpoints for a trip"""
+        trip = self.db.query(Trip).filter(Trip.id == trip_id).first()
+        if not trip or not trip.published_route_id:
             return []
 
-        # Use locked version if user has active session
-        version_id = route.published_version_id
+        # Use locked route if user has active session
+        route_id = trip.published_route_id
         if user_id:
-            active = self.db.query(UserActiveRoute).filter(
-                UserActiveRoute.user_id == user_id,
-                UserActiveRoute.route_id == route_id,
-                UserActiveRoute.completed_at == None
+            active = self.db.query(UserActiveTrip).filter(
+                UserActiveTrip.user_id == user_id,
+                UserActiveTrip.trip_id == trip_id,
+                UserActiveTrip.completed_at == None
             ).first()
             if active:
-                version_id = active.locked_version_id
+                route_id = active.locked_route_id
 
         checkpoints = self.db.query(Checkpoint).filter(
-            Checkpoint.route_version_id == version_id
+            Checkpoint.route_id == route_id
         ).order_by(Checkpoint.seq_no).all()
 
         result = []
@@ -424,11 +424,11 @@ class RouteService:
         self.db.commit()
 
         # Check for auto-completion
-        route = self.db.query(Route).join(
-            RouteVersion, Route.id == RouteVersion.route_id
-        ).filter(RouteVersion.id == checkpoint.route_version_id).first()
-        if route:
-            self._check_automatic_completion(user_id, route.id)
+        trip = self.db.query(Trip).join(
+            Route, Trip.id == Route.trip_id
+        ).filter(Route.id == checkpoint.route_id).first()
+        if trip:
+            self._check_automatic_completion(user_id, trip.id)
 
         return self._get_checkpoint_progress(checkpoint, vp, "en")
 
@@ -468,11 +468,11 @@ class RouteService:
         self.db.commit()
 
         # Check for auto-completion
-        route = self.db.query(Route).join(
-            RouteVersion, Route.id == RouteVersion.route_id
-        ).filter(RouteVersion.id == checkpoint.route_version_id).first()
-        if route:
-            self._check_automatic_completion(user_id, route.id)
+        trip = self.db.query(Trip).join(
+            Route, Trip.id == Route.trip_id
+        ).filter(Route.id == checkpoint.route_id).first()
+        if trip:
+            self._check_automatic_completion(user_id, trip.id)
 
         return self._get_checkpoint_progress(checkpoint, vp, "en")
 
@@ -498,49 +498,49 @@ class RouteService:
             "audio_completed_at": vp.audio_completed_at if vp else None
         }
 
-    # ========== Active Routes Operations ==========
+    # ========== Active Trips Operations ==========
 
-    def get_user_active_routes(self, user_id: int, lang: str = "en") -> list[dict]:
-        """Get user's active routes"""
-        sessions = self.db.query(UserActiveRoute).filter(
-            UserActiveRoute.user_id == user_id
-        ).order_by(UserActiveRoute.started_at.desc()).all()
+    def get_user_active_trips(self, user_id: int, lang: str = "en") -> list[dict]:
+        """Get user's active trips"""
+        sessions = self.db.query(UserActiveTrip).filter(
+            UserActiveTrip.user_id == user_id
+        ).order_by(UserActiveTrip.started_at.desc()).all()
 
         result = []
         for session in sessions:
-            route = session.route
-            version = session.locked_version
-            city = self.db.query(City).filter(City.geonameid == route.city_id).first()
+            trip = session.trip
+            route = session.locked_route
+            city = self.db.query(City).filter(City.geonameid == trip.city_id).first()
 
             checkpoint_count = self.db.query(func.count(Checkpoint.id)).filter(
-                Checkpoint.route_version_id == version.id,
+                Checkpoint.route_id == route.id,
                 Checkpoint.is_visible == True
             ).scalar() or 0
 
-            progress = self._calculate_user_progress(user_id, version.id)
+            progress = self._calculate_user_progress(user_id, route.id)
 
             result.append({
                 "id": session.id,
-                "route": {
-                    "id": route.id,
-                    "slug": route.slug,
-                    "status": route.status.value,
-                    "title": self._resolve_i18n(version.title_i18n, lang),
-                    "summary": self._resolve_i18n(version.summary_i18n, lang) if version.summary_i18n else None,
-                    "duration_min": version.duration_min,
-                    "distance_m": version.distance_m,
-                    "ascent_m": version.ascent_m,
-                    "descent_m": version.descent_m,
-                    "languages": version.languages or [],
-                    "free_checkpoint_limit": version.free_checkpoint_limit,
-                    "price_amount": version.price_amount,
-                    "price_currency": version.price_currency,
-                    "city_id": route.city_id,
+                "trip": {
+                    "id": trip.id,
+                    "slug": trip.slug,
+                    "status": trip.status.value,
+                    "title": self._resolve_i18n(route.title_i18n, lang),
+                    "summary": self._resolve_i18n(route.summary_i18n, lang) if route.summary_i18n else None,
+                    "duration_min": route.duration_min,
+                    "distance_m": route.distance_m,
+                    "ascent_m": route.ascent_m,
+                    "descent_m": route.descent_m,
+                    "languages": route.languages or [],
+                    "free_checkpoint_limit": route.free_checkpoint_limit,
+                    "price_amount": route.price_amount,
+                    "price_currency": route.price_currency,
+                    "city_id": trip.city_id,
                     "city_name": city.name if city else "",
                     "checkpoint_count": checkpoint_count,
                     "user_progress": None
                 },
-                "locked_version_id": session.locked_version_id,
+                "locked_route_id": session.locked_route_id,
                 "started_at": session.started_at,
                 "completed_at": session.completed_at,
                 "completion_type": session.completion_type.value if session.completion_type else None,
@@ -554,40 +554,40 @@ class RouteService:
 
         return result
 
-    def start_route(self, user_id: int, route_id: UUID) -> dict | None:
-        """Start a route session"""
-        route = self.db.query(Route).filter(Route.id == route_id).first()
-        if not route or not route.published_version_id:
+    def start_trip(self, user_id: int, trip_id: UUID) -> dict | None:
+        """Start a trip session"""
+        trip = self.db.query(Trip).filter(Trip.id == trip_id).first()
+        if not trip or not trip.published_route_id:
             return None
 
         # Check if already started
-        existing = self.db.query(UserActiveRoute).filter(
-            UserActiveRoute.user_id == user_id,
-            UserActiveRoute.route_id == route_id
+        existing = self.db.query(UserActiveTrip).filter(
+            UserActiveTrip.user_id == user_id,
+            UserActiveTrip.trip_id == trip_id
         ).first()
 
         if existing:
             # Return existing session
-            return self._get_active_route_response(existing, "en")
+            return self._get_active_trip_response(existing, "en")
 
         # Create new session
-        session = UserActiveRoute(
+        session = UserActiveTrip(
             user_id=user_id,
-            route_id=route_id,
-            locked_version_id=route.published_version_id
+            trip_id=trip_id,
+            locked_route_id=trip.published_route_id
         )
         self.db.add(session)
         self.db.commit()
         self.db.refresh(session)
 
-        return self._get_active_route_response(session, "en")
+        return self._get_active_trip_response(session, "en")
 
-    def finish_route(self, user_id: int, route_id: UUID) -> dict | None:
-        """Manually finish a route"""
-        session = self.db.query(UserActiveRoute).filter(
-            UserActiveRoute.user_id == user_id,
-            UserActiveRoute.route_id == route_id,
-            UserActiveRoute.completed_at == None
+    def finish_trip(self, user_id: int, trip_id: UUID) -> dict | None:
+        """Manually finish a trip"""
+        session = self.db.query(UserActiveTrip).filter(
+            UserActiveTrip.user_id == user_id,
+            UserActiveTrip.trip_id == trip_id,
+            UserActiveTrip.completed_at == None
         ).first()
 
         if not session:
@@ -597,43 +597,43 @@ class RouteService:
         session.completion_type = CompletionType.MANUAL
         self.db.commit()
 
-        return self._get_active_route_response(session, "en")
+        return self._get_active_trip_response(session, "en")
 
-    def _get_active_route_response(self, session: UserActiveRoute, lang: str) -> dict:
-        """Build active route response"""
-        route = session.route
-        version = session.locked_version
-        city = self.db.query(City).filter(City.geonameid == route.city_id).first()
+    def _get_active_trip_response(self, session: UserActiveTrip, lang: str) -> dict:
+        """Build active trip response"""
+        trip = session.trip
+        route = session.locked_route
+        city = self.db.query(City).filter(City.geonameid == trip.city_id).first()
 
         checkpoint_count = self.db.query(func.count(Checkpoint.id)).filter(
-            Checkpoint.route_version_id == version.id,
+            Checkpoint.route_id == route.id,
             Checkpoint.is_visible == True
         ).scalar() or 0
 
-        progress = self._calculate_user_progress(session.user_id, version.id)
+        progress = self._calculate_user_progress(session.user_id, route.id)
 
         return {
             "id": session.id,
-            "route": {
-                "id": route.id,
-                "slug": route.slug,
-                "status": route.status.value,
-                "title": self._resolve_i18n(version.title_i18n, lang),
-                "summary": self._resolve_i18n(version.summary_i18n, lang) if version.summary_i18n else None,
-                "duration_min": version.duration_min,
-                "distance_m": version.distance_m,
-                "ascent_m": version.ascent_m,
-                "descent_m": version.descent_m,
-                "languages": version.languages or [],
-                "free_checkpoint_limit": version.free_checkpoint_limit,
-                "price_amount": version.price_amount,
-                "price_currency": version.price_currency,
-                "city_id": route.city_id,
+            "trip": {
+                "id": trip.id,
+                "slug": trip.slug,
+                "status": trip.status.value,
+                "title": self._resolve_i18n(route.title_i18n, lang),
+                "summary": self._resolve_i18n(route.summary_i18n, lang) if route.summary_i18n else None,
+                "duration_min": route.duration_min,
+                "distance_m": route.distance_m,
+                "ascent_m": route.ascent_m,
+                "descent_m": route.descent_m,
+                "languages": route.languages or [],
+                "free_checkpoint_limit": route.free_checkpoint_limit,
+                "price_amount": route.price_amount,
+                "price_currency": route.price_currency,
+                "city_id": trip.city_id,
                 "city_name": city.name if city else "",
                 "checkpoint_count": checkpoint_count,
                 "user_progress": None
             },
-            "locked_version_id": session.locked_version_id,
+            "locked_route_id": session.locked_route_id,
             "started_at": session.started_at,
             "completed_at": session.completed_at,
             "completion_type": session.completion_type.value if session.completion_type else None,
@@ -647,131 +647,131 @@ class RouteService:
 
     # ========== Admin Operations ==========
 
-    def create_route(self, user_id: int, city_id: int, slug: str, status: str = "draft") -> Route:
-        """Create new route"""
-        route = Route(
+    def create_trip(self, user_id: int, city_id: int, slug: str, status: str = "draft") -> Trip:
+        """Create new trip"""
+        trip = Trip(
             created_by_user_id=user_id,
             city_id=city_id,
             slug=slug,
-            status=RouteStatus(status)
+            status=TripStatus(status)
         )
-        self.db.add(route)
+        self.db.add(trip)
         self.db.commit()
-        self.db.refresh(route)
-        return route
+        self.db.refresh(trip)
+        return trip
 
-    def update_route(self, route_id: UUID, slug: str | None = None, status: str | None = None) -> Route | None:
-        """Update route metadata"""
-        route = self.db.query(Route).filter(Route.id == route_id).first()
-        if not route:
+    def update_trip(self, trip_id: UUID, slug: str | None = None, status: str | None = None) -> Trip | None:
+        """Update trip metadata"""
+        trip = self.db.query(Trip).filter(Trip.id == trip_id).first()
+        if not trip:
             return None
 
         if slug is not None:
-            route.slug = slug
+            trip.slug = slug
         if status is not None:
-            route.status = RouteStatus(status)
+            trip.status = TripStatus(status)
 
         self.db.commit()
-        self.db.refresh(route)
-        return route
+        self.db.refresh(trip)
+        return trip
 
-    def delete_route(self, route_id: UUID) -> bool:
-        """Delete route (cascades to versions, checkpoints)"""
-        route = self.db.query(Route).filter(Route.id == route_id).first()
-        if not route:
+    def delete_trip(self, trip_id: UUID) -> bool:
+        """Delete trip (cascades to routes, checkpoints)"""
+        trip = self.db.query(Trip).filter(Trip.id == trip_id).first()
+        if not trip:
             return False
 
-        self.db.delete(route)
+        self.db.delete(trip)
         self.db.commit()
         return True
 
-    def get_route_admin(self, route_id: UUID) -> dict | None:
-        """Get route with version count for admin view"""
-        route = self.db.query(Route).filter(Route.id == route_id).first()
-        if not route:
+    def get_trip_admin(self, trip_id: UUID) -> dict | None:
+        """Get trip with route count for admin view"""
+        trip = self.db.query(Trip).filter(Trip.id == trip_id).first()
+        if not trip:
             return None
 
-        version_count = self.db.query(func.count(RouteVersion.id)).filter(
-            RouteVersion.route_id == route_id
+        route_count = self.db.query(func.count(Route.id)).filter(
+            Route.trip_id == trip_id
         ).scalar() or 0
 
-        city = self.db.query(City).filter(City.geonameid == route.city_id).first()
+        city = self.db.query(City).filter(City.geonameid == trip.city_id).first()
 
         return {
-            "id": route.id,
-            "slug": route.slug,
-            "status": route.status.value,
-            "city_id": route.city_id,
+            "id": trip.id,
+            "slug": trip.slug,
+            "status": trip.status.value,
+            "city_id": trip.city_id,
             "city_name": city.name if city else "",
-            "created_by_user_id": route.created_by_user_id,
-            "published_version_id": route.published_version_id,
-            "version_count": version_count,
-            "created_at": route.created_at,
-            "updated_at": route.updated_at
+            "created_by_user_id": trip.created_by_user_id,
+            "published_route_id": trip.published_route_id,
+            "route_count": route_count,
+            "created_at": trip.created_at,
+            "updated_at": trip.updated_at
         }
 
-    def list_routes_admin(
+    def list_trips_admin(
         self,
         city_id: int | None = None,
         status: list[str] | None = None,
         limit: int = 50,
         offset: int = 0
     ) -> dict:
-        """List routes for admin with all statuses"""
-        query = self.db.query(Route)
+        """List trips for admin with all statuses"""
+        query = self.db.query(Trip)
 
         if city_id:
-            query = query.filter(Route.city_id == city_id)
+            query = query.filter(Trip.city_id == city_id)
 
         if status:
-            statuses = [RouteStatus(s) for s in status if s in RouteStatus.__members__.values()]
+            statuses = [TripStatus(s) for s in status if s in TripStatus.__members__.values()]
             if statuses:
-                query = query.filter(Route.status.in_(statuses))
+                query = query.filter(Trip.status.in_(statuses))
 
         count = query.count()
-        routes = query.order_by(Route.created_at.desc()).offset(offset).limit(limit).all()
+        trips = query.order_by(Trip.created_at.desc()).offset(offset).limit(limit).all()
 
         result = []
-        for route in routes:
-            version_count = self.db.query(func.count(RouteVersion.id)).filter(
-                RouteVersion.route_id == route.id
+        for trip in trips:
+            route_count = self.db.query(func.count(Route.id)).filter(
+                Route.trip_id == trip.id
             ).scalar() or 0
 
-            city = self.db.query(City).filter(City.geonameid == route.city_id).first()
+            city = self.db.query(City).filter(City.geonameid == trip.city_id).first()
 
             result.append({
-                "id": route.id,
-                "slug": route.slug,
-                "status": route.status.value,
-                "city_id": route.city_id,
+                "id": trip.id,
+                "slug": trip.slug,
+                "status": trip.status.value,
+                "city_id": trip.city_id,
                 "city_name": city.name if city else "",
-                "created_by_user_id": route.created_by_user_id,
-                "published_version_id": route.published_version_id,
-                "version_count": version_count,
-                "created_at": route.created_at,
-                "updated_at": route.updated_at
+                "created_by_user_id": trip.created_by_user_id,
+                "published_route_id": trip.published_route_id,
+                "route_count": route_count,
+                "created_at": trip.created_at,
+                "updated_at": trip.updated_at
             })
 
-        return {"count": count, "routes": result}
+        return {"count": count, "trips": result}
 
-    def create_route_version(self, route_id: UUID, user_id: int, data: dict) -> RouteVersion | None:
-        """Create version from data dict with automatic checkpoint creation"""
-        route = self.db.query(Route).filter(Route.id == route_id).first()
-        if not route:
+    def create_route(self, trip_id: UUID, user_id: int, data: dict) -> Route | None:
+        """Create route from data dict with automatic checkpoint creation"""
+        trip = self.db.query(Trip).filter(Trip.id == trip_id).first()
+        if not trip:
             return None
 
         # Auto-set version_no to max(existing) + 1
-        max_version = self.db.query(func.max(RouteVersion.version_no)).filter(
-            RouteVersion.route_id == route_id
+        max_version = self.db.query(func.max(Route.version_no)).filter(
+            Route.trip_id == trip_id
         ).scalar() or 0
         version_no = max_version + 1
 
-        # Create version
-        version = RouteVersion(
-            route_id=route_id,
+        # Create route
+        route = Route(
+            trip_id=trip_id,
             version_no=version_no,
             created_by_user_id=user_id,
-            status=RouteVersionStatus.DRAFT,
+            status=RouteStatus.DRAFT,
             title_i18n=data.get("title_i18n", {}),
             summary_i18n=data.get("summary_i18n"),
             languages=data.get("languages", []),
@@ -784,7 +784,7 @@ class RouteService:
             price_amount=data.get("price_amount"),
             price_currency=data.get("price_currency", "USD")
         )
-        self.db.add(version)
+        self.db.add(route)
         self.db.flush()
 
         # Extract features from geojson and create checkpoints
@@ -797,7 +797,7 @@ class RouteService:
                 if isinstance(geom, Point):
                     props = feature.get("properties", {})
                     checkpoint = Checkpoint(
-                        route_version_id=version.id,
+                        route_id=route.id,
                         seq_no=seq_no,
                         source_point_id=props.get("id"),
                         title_i18n=props.get("title_i18n", {"en": f"Point {seq_no}"}),
@@ -812,116 +812,116 @@ class RouteService:
                     self.db.add(checkpoint)
                     seq_no += 1
                 elif isinstance(geom, LineString):
-                    version.path = from_shape(geom, srid=4326)
-
-        self.db.commit()
-        self.db.refresh(version)
-        return version
-
-    def get_route_versions(self, route_id: UUID) -> list[dict]:
-        """List all versions for a route"""
-        versions = self.db.query(RouteVersion).filter(
-            RouteVersion.route_id == route_id
-        ).order_by(RouteVersion.version_no.desc()).all()
-
-        result = []
-        for version in versions:
-            checkpoint_count = self.db.query(func.count(Checkpoint.id)).filter(
-                Checkpoint.route_version_id == version.id
-            ).scalar() or 0
-
-            result.append({
-                "id": version.id,
-                "route_id": version.route_id,
-                "version_no": version.version_no,
-                "status": version.status.value,
-                "created_by_user_id": version.created_by_user_id,
-                "title_i18n": version.title_i18n,
-                "summary_i18n": version.summary_i18n,
-                "languages": version.languages,
-                "duration_min": version.duration_min,
-                "distance_m": version.distance_m,
-                "ascent_m": version.ascent_m,
-                "descent_m": version.descent_m,
-                "free_checkpoint_limit": version.free_checkpoint_limit,
-                "price_amount": version.price_amount,
-                "price_currency": version.price_currency,
-                "checkpoint_count": checkpoint_count,
-                "created_at": version.created_at,
-                "updated_at": version.updated_at,
-                "published_at": version.published_at
-            })
-
-        return result
-
-    def update_route_version(self, version_id: UUID, data: dict) -> RouteVersion | None:
-        """Update version metadata (not checkpoints)"""
-        version = self.db.query(RouteVersion).filter(RouteVersion.id == version_id).first()
-        if not version:
-            return None
-
-        # Update fields if provided
-        if "title_i18n" in data:
-            version.title_i18n = data["title_i18n"]
-        if "summary_i18n" in data:
-            version.summary_i18n = data["summary_i18n"]
-        if "languages" in data:
-            version.languages = data["languages"]
-        if "duration_min" in data:
-            version.duration_min = data["duration_min"]
-        if "distance_m" in data:
-            version.distance_m = data["distance_m"]
-        if "ascent_m" in data:
-            version.ascent_m = data["ascent_m"]
-        if "descent_m" in data:
-            version.descent_m = data["descent_m"]
-        if "free_checkpoint_limit" in data:
-            version.free_checkpoint_limit = data["free_checkpoint_limit"]
-        if "price_amount" in data:
-            version.price_amount = data["price_amount"]
-        if "price_currency" in data:
-            version.price_currency = data["price_currency"]
-        if "geojson" in data:
-            version.geojson = data["geojson"]
-
-        version.updated_at = datetime.now(timezone.utc)
-        self.db.commit()
-        self.db.refresh(version)
-        return version
-
-    def publish_version(self, route_id: UUID, version_id: UUID) -> Route | None:
-        """Set version status to published and update route"""
-        route = self.db.query(Route).filter(Route.id == route_id).first()
-        if not route:
-            return None
-
-        version = self.db.query(RouteVersion).filter(RouteVersion.id == version_id).first()
-        if not version or version.route_id != route_id:
-            return None
-
-        # Set any previously published version to superseded
-        if route.published_version_id:
-            old_version = self.db.query(RouteVersion).filter(
-                RouteVersion.id == route.published_version_id
-            ).first()
-            if old_version:
-                old_version.status = RouteVersionStatus.SUPERSEDED
-                old_version.updated_at = datetime.now(timezone.utc)
-
-        # Publish new version
-        version.status = RouteVersionStatus.PUBLISHED
-        version.published_at = datetime.now(timezone.utc)
-        version.updated_at = datetime.now(timezone.utc)
-
-        # Update route
-        route.published_version_id = version_id
-        if route.status != RouteStatus.PUBLISHED:
-            route.status = RouteStatus.PUBLISHED
-        route.updated_at = datetime.now(timezone.utc)
+                    route.path = from_shape(geom, srid=4326)
 
         self.db.commit()
         self.db.refresh(route)
         return route
+
+    def get_trip_routes(self, trip_id: UUID) -> list[dict]:
+        """List all routes for a trip"""
+        routes = self.db.query(Route).filter(
+            Route.trip_id == trip_id
+        ).order_by(Route.version_no.desc()).all()
+
+        result = []
+        for route in routes:
+            checkpoint_count = self.db.query(func.count(Checkpoint.id)).filter(
+                Checkpoint.route_id == route.id
+            ).scalar() or 0
+
+            result.append({
+                "id": route.id,
+                "trip_id": route.trip_id,
+                "version_no": route.version_no,
+                "status": route.status.value,
+                "created_by_user_id": route.created_by_user_id,
+                "title_i18n": route.title_i18n,
+                "summary_i18n": route.summary_i18n,
+                "languages": route.languages,
+                "duration_min": route.duration_min,
+                "distance_m": route.distance_m,
+                "ascent_m": route.ascent_m,
+                "descent_m": route.descent_m,
+                "free_checkpoint_limit": route.free_checkpoint_limit,
+                "price_amount": route.price_amount,
+                "price_currency": route.price_currency,
+                "checkpoint_count": checkpoint_count,
+                "created_at": route.created_at,
+                "updated_at": route.updated_at,
+                "published_at": route.published_at
+            })
+
+        return result
+
+    def update_route(self, route_id: UUID, data: dict) -> Route | None:
+        """Update route metadata (not checkpoints)"""
+        route = self.db.query(Route).filter(Route.id == route_id).first()
+        if not route:
+            return None
+
+        # Update fields if provided
+        if "title_i18n" in data:
+            route.title_i18n = data["title_i18n"]
+        if "summary_i18n" in data:
+            route.summary_i18n = data["summary_i18n"]
+        if "languages" in data:
+            route.languages = data["languages"]
+        if "duration_min" in data:
+            route.duration_min = data["duration_min"]
+        if "distance_m" in data:
+            route.distance_m = data["distance_m"]
+        if "ascent_m" in data:
+            route.ascent_m = data["ascent_m"]
+        if "descent_m" in data:
+            route.descent_m = data["descent_m"]
+        if "free_checkpoint_limit" in data:
+            route.free_checkpoint_limit = data["free_checkpoint_limit"]
+        if "price_amount" in data:
+            route.price_amount = data["price_amount"]
+        if "price_currency" in data:
+            route.price_currency = data["price_currency"]
+        if "geojson" in data:
+            route.geojson = data["geojson"]
+
+        route.updated_at = datetime.now(timezone.utc)
+        self.db.commit()
+        self.db.refresh(route)
+        return route
+
+    def publish_route(self, trip_id: UUID, route_id: UUID) -> Trip | None:
+        """Set route status to published and update trip"""
+        trip = self.db.query(Trip).filter(Trip.id == trip_id).first()
+        if not trip:
+            return None
+
+        route = self.db.query(Route).filter(Route.id == route_id).first()
+        if not route or route.trip_id != trip_id:
+            return None
+
+        # Set any previously published route to superseded
+        if trip.published_route_id:
+            old_route = self.db.query(Route).filter(
+                Route.id == trip.published_route_id
+            ).first()
+            if old_route:
+                old_route.status = RouteStatus.SUPERSEDED
+                old_route.updated_at = datetime.now(timezone.utc)
+
+        # Publish new route
+        route.status = RouteStatus.PUBLISHED
+        route.published_at = datetime.now(timezone.utc)
+        route.updated_at = datetime.now(timezone.utc)
+
+        # Update trip
+        trip.published_route_id = route_id
+        if trip.status != TripStatus.PUBLISHED:
+            trip.status = TripStatus.PUBLISHED
+        trip.updated_at = datetime.now(timezone.utc)
+
+        self.db.commit()
+        self.db.refresh(trip)
+        return trip
 
     def update_checkpoint(self, checkpoint_id: UUID, data: dict) -> Checkpoint | None:
         """Update checkpoint metadata"""
@@ -957,10 +957,10 @@ class RouteService:
         self.db.refresh(checkpoint)
         return checkpoint
 
-    def get_version_checkpoints_admin(self, version_id: UUID) -> list[dict]:
-        """Get all checkpoints for a version (admin view, all fields)"""
+    def get_route_checkpoints_admin(self, route_id: UUID) -> list[dict]:
+        """Get all checkpoints for a route (admin view, all fields)"""
         checkpoints = self.db.query(Checkpoint).filter(
-            Checkpoint.route_version_id == version_id
+            Checkpoint.route_id == route_id
         ).order_by(Checkpoint.seq_no).all()
 
         result = []
@@ -968,7 +968,7 @@ class RouteService:
             point = to_shape(cp.location)
             result.append({
                 "id": cp.id,
-                "route_version_id": cp.route_version_id,
+                "route_id": cp.route_id,
                 "seq_no": cp.seq_no,
                 "source_point_id": cp.source_point_id,
                 "title_i18n": cp.title_i18n,

@@ -1,4 +1,4 @@
-"""Business logic for user wishes (routes) and wants (cities)."""
+"""Business logic for user wishes (trips) and wants (cities)."""
 
 from datetime import datetime, timezone
 from uuid import UUID
@@ -21,26 +21,26 @@ class WishService:
             return ""
         return hstore.get(lang) or hstore.get(fallback) or next(iter(hstore.values()), "")
 
-    # ========== Wished Routes ==========
+    # ========== Wished Trips ==========
 
     def wish_route(self, user_id: int, route_id: UUID, lang: str = "en") -> dict:
-        """Add or reactivate a wish for a coming_soon route.
+        """Add or reactivate a wish for a coming_soon trip.
 
         Returns dict with result or error info.
         """
-        # Validate route exists
+        # Validate trip exists
         route = self.db.query(Route).filter(Route.id == route_id).first()
         if not route:
-            return {"error": "Route not found", "code": "not_found"}
+            return {"error": "Trip not found", "code": "not_found"}
 
-        # Only coming_soon routes can be wished
+        # Only coming_soon trips can be wished
         if route.status != RouteStatus.COMING_SOON:
             return {
-                "error": "Can only wish coming_soon routes",
+                "error": "Can only wish coming_soon trips",
                 "code": "invalid_status"
             }
 
-        # Check if user already completed this route
+        # Check if user already completed this trip
         completed = self.db.query(UserActiveRoute).filter(
             UserActiveRoute.user_id == user_id,
             UserActiveRoute.route_id == route_id,
@@ -48,21 +48,21 @@ class WishService:
         ).first()
         if completed:
             return {
-                "error": "Cannot wish a route you have already completed",
+                "error": "Cannot wish a trip you have already completed",
                 "code": "already_completed"
             }
 
         # Upsert wish
         existing = self.db.query(WishedRoute).filter(
             WishedRoute.user_id == user_id,
-            WishedRoute.route_id == route_id
+            WishedRoute.trip_id == route_id
         ).first()
 
         if existing:
             existing.is_active = True
             existing.updated_at = datetime.now(timezone.utc)
         else:
-            wish = WishedRoute(user_id=user_id, route_id=route_id)
+            wish = WishedRoute(user_id=user_id, trip_id=route_id)
             self.db.add(wish)
 
         self.db.commit()
@@ -72,7 +72,7 @@ class WishService:
         """Deactivate a wish (soft delete)."""
         wish = self.db.query(WishedRoute).filter(
             WishedRoute.user_id == user_id,
-            WishedRoute.route_id == route_id
+            WishedRoute.trip_id == route_id
         ).first()
 
         if not wish:
@@ -85,22 +85,22 @@ class WishService:
         return self.get_wished_route(user_id, route_id, lang)
 
     def get_wished_route(self, user_id: int, route_id: UUID, lang: str = "en") -> dict | None:
-        """Get single wished route with route details."""
+        """Get single wished trip with trip details."""
         wish = self.db.query(WishedRoute).filter(
             WishedRoute.user_id == user_id,
-            WishedRoute.route_id == route_id
+            WishedRoute.trip_id == route_id
         ).first()
 
         if not wish:
             return None
 
-        route = wish.route
-        city = self.db.query(City).filter(City.geonameid == route.city_id).first()
+        trip = wish.trip
+        city = self.db.query(City).filter(City.geonameid == trip.city_id).first()
 
-        # Get title from published version or latest version
+        # Get title from published route or latest route
         title = ""
-        if route.published_version:
-            title = self._resolve_i18n(route.published_version.title_i18n, lang)
+        if trip.published_version:
+            title = self._resolve_i18n(trip.published_version.title_i18n, lang)
         else:
             latest = self.db.query(RouteVersion).filter(
                 RouteVersion.route_id == route_id
@@ -109,10 +109,10 @@ class WishService:
                 title = self._resolve_i18n(latest.title_i18n, lang)
 
         return {
-            "route_id": route.id,
-            "route_slug": route.slug,
-            "route_title": title,
-            "city_id": route.city_id,
+            "trip_id": trip.id,
+            "trip_slug": trip.slug,
+            "trip_title": title,
+            "city_id": trip.city_id,
             "city_name": city.name if city else "",
             "is_active": wish.is_active,
             "created_at": wish.created_at,
@@ -121,7 +121,7 @@ class WishService:
     def get_user_wished_routes(
         self, user_id: int, active_only: bool = True, lang: str = "en"
     ) -> list[dict]:
-        """Get all user's wished routes."""
+        """Get all user's wished trips."""
         query = self.db.query(WishedRoute).filter(WishedRoute.user_id == user_id)
         if active_only:
             query = query.filter(WishedRoute.is_active == True)  # noqa: E712
@@ -129,16 +129,16 @@ class WishService:
         wishes = query.order_by(WishedRoute.created_at.desc()).all()
         result = []
         for w in wishes:
-            item = self.get_wished_route(user_id, w.route_id, lang)
+            item = self.get_wished_route(user_id, w.trip_id, lang)
             if item:
                 result.append(item)
         return result
 
     def is_route_wished(self, user_id: int, route_id: UUID) -> bool:
-        """Check if user has active wish for route."""
+        """Check if user has active wish for trip."""
         return self.db.query(WishedRoute).filter(
             WishedRoute.user_id == user_id,
-            WishedRoute.route_id == route_id,
+            WishedRoute.trip_id == route_id,
             WishedRoute.is_active == True  # noqa: E712
         ).first() is not None
 
@@ -195,7 +195,7 @@ class WishService:
 
         city = want.city
 
-        # Check if city now has published routes
+        # Check if city now has published trips
         has_routes = self.db.query(Route).filter(
             Route.city_id == geonameid,
             Route.status == RouteStatus.PUBLISHED
@@ -245,30 +245,30 @@ class WishService:
         offset: int = 0,
         lang: str = "en"
     ) -> dict:
-        """Get aggregated wish counts per route for admin."""
+        """Get aggregated wish counts per trip for admin."""
         # Subquery for active wish count
         active_count_sq = self.db.query(
-            WishedRoute.route_id,
+            WishedRoute.trip_id,
             func.count(WishedRoute.user_id).label("active_count")
         ).filter(
             WishedRoute.is_active == True  # noqa: E712
-        ).group_by(WishedRoute.route_id).subquery()
+        ).group_by(WishedRoute.trip_id).subquery()
 
         # Subquery for total wish count (including inactive)
         total_count_sq = self.db.query(
-            WishedRoute.route_id,
+            WishedRoute.trip_id,
             func.count(WishedRoute.user_id).label("total_count")
-        ).group_by(WishedRoute.route_id).subquery()
+        ).group_by(WishedRoute.trip_id).subquery()
 
-        # Main query joining routes with wish counts
+        # Main query joining trips with wish counts
         query = self.db.query(
             Route,
             func.coalesce(active_count_sq.c.active_count, 0).label("active_wish_count"),
             func.coalesce(total_count_sq.c.total_count, 0).label("total_wish_count")
         ).outerjoin(
-            active_count_sq, Route.id == active_count_sq.c.route_id
+            active_count_sq, Route.id == active_count_sq.c.trip_id
         ).outerjoin(
-            total_count_sq, Route.id == total_count_sq.c.route_id
+            total_count_sq, Route.id == total_count_sq.c.trip_id
         )
 
         # Apply filters
@@ -292,32 +292,32 @@ class WishService:
         count = query.count()
         results = query.offset(offset).limit(limit).all()
 
-        routes_data = []
-        for route, active_count, total_count in results:
-            city = self.db.query(City).filter(City.geonameid == route.city_id).first()
+        trips_data = []
+        for trip, active_count, total_count in results:
+            city = self.db.query(City).filter(City.geonameid == trip.city_id).first()
 
             title = ""
-            if route.published_version:
-                title = self._resolve_i18n(route.published_version.title_i18n, lang)
+            if trip.published_version:
+                title = self._resolve_i18n(trip.published_version.title_i18n, lang)
             else:
                 latest = self.db.query(RouteVersion).filter(
-                    RouteVersion.route_id == route.id
+                    RouteVersion.route_id == trip.id
                 ).order_by(RouteVersion.version_no.desc()).first()
                 if latest:
                     title = self._resolve_i18n(latest.title_i18n, lang)
 
-            routes_data.append({
-                "route_id": route.id,
-                "route_slug": route.slug,
-                "route_title": title,
-                "city_id": route.city_id,
+            trips_data.append({
+                "trip_id": trip.id,
+                "trip_slug": trip.slug,
+                "trip_title": title,
+                "city_id": trip.city_id,
                 "city_name": city.name if city else "",
-                "route_status": route.status.value,
+                "trip_status": trip.status.value,
                 "active_wish_count": active_count,
                 "total_wish_count": total_count,
             })
 
-        return {"count": count, "routes": routes_data}
+        return {"count": count, "trips": trips_data}
 
     def get_city_want_stats(
         self,
@@ -342,7 +342,7 @@ class WishService:
             func.count(WantedCity.user_id).label("total_count")
         ).group_by(WantedCity.geonameid).subquery()
 
-        # Subquery for published route count per city
+        # Subquery for published trip count per city
         route_count_sq = self.db.query(
             Route.city_id,
             func.count(Route.id).label("route_count")
@@ -404,7 +404,7 @@ class WishService:
                 "country_name": country.name if country else "",
                 "population": city.population,
                 "has_routes": route_count > 0,
-                "route_count": route_count,
+                "trip_count": route_count,
                 "active_want_count": active_count,
                 "total_want_count": total_count,
             })
@@ -414,9 +414,9 @@ class WishService:
     # ========== Notification Helpers ==========
 
     def get_users_who_wished_route(self, route_id: UUID) -> list[int]:
-        """Get user IDs who actively wished a route (for notifications)."""
+        """Get user IDs who actively wished a trip (for notifications)."""
         wishes = self.db.query(WishedRoute.user_id).filter(
-            WishedRoute.route_id == route_id,
+            WishedRoute.trip_id == route_id,
             WishedRoute.is_active == True  # noqa: E712
         ).all()
         return [w.user_id for w in wishes]

@@ -26,14 +26,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
-class RouteStatus(str, enum.Enum):
+class TripStatus(str, enum.Enum):
     DRAFT = "draft"
     PUBLISHED = "published"
     COMING_SOON = "coming_soon"
     ARCHIVED = "archived"
 
 
-class RouteVersionStatus(str, enum.Enum):
+class RouteStatus(str, enum.Enum):
     DRAFT = "draft"
     REVIEW = "review"
     PUBLISHED = "published"
@@ -51,7 +51,8 @@ class CompletionType(str, enum.Enum):
     AUTOMATIC = "automatic"
 
 
-class Route(Base):
+class Trip(Base):
+    """A trip is the top-level entity for an audio guide experience in a city."""
     __tablename__ = "routes"
 
     id: Mapped[UUID] = mapped_column(
@@ -63,7 +64,7 @@ class Route(Base):
     slug: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(
         Enum(
-            RouteStatus,
+            TripStatus,
             name="route_status",
             create_type=False,
             values_callable=lambda enum: [e.value for e in enum]
@@ -71,7 +72,7 @@ class Route(Base):
         nullable=False,
         server_default="draft",
     )
-    published_version_id: Mapped[UUID | None] = mapped_column(
+    published_route_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("route_versions.id", use_alter=True, name="fk_route_published_version"),
     )
@@ -87,21 +88,23 @@ class Route(Base):
         onupdate=func.now(),
         nullable=False,
     )
+    # US-033: Draft GeoJSON for editing before publish
+    draft_geojson: Mapped[dict | None] = mapped_column(JSONB)
 
     # Relationships
     city: Mapped["City"] = relationship()  # type: ignore
     created_by: Mapped["AppUser"] = relationship()  # type: ignore
-    versions: Mapped[list["RouteVersion"]] = relationship(
-        back_populates="route",
+    routes: Mapped[list["Route"]] = relationship(
+        back_populates="trip",
         cascade="all, delete-orphan",
-        foreign_keys="[RouteVersion.route_id]",
+        foreign_keys="[Route.trip_id]",
     )
-    published_version: Mapped["RouteVersion | None"] = relationship(
-        foreign_keys=[published_version_id],
+    published_route: Mapped["Route | None"] = relationship(
+        foreign_keys=[published_route_id],
         post_update=True,
     )
-    active_sessions: Mapped[list["UserActiveRoute"]] = relationship(
-        back_populates="route",
+    active_sessions: Mapped[list["UserActiveTrip"]] = relationship(
+        back_populates="trip",
         cascade="all, delete-orphan",
     )
 
@@ -113,13 +116,14 @@ class Route(Base):
     )
 
 
-class RouteVersion(Base):
+class Route(Base):
+    """A route is a specific version of a trip with fixed content and checkpoints."""
     __tablename__ = "route_versions"
 
     id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
     )
-    route_id: Mapped[UUID] = mapped_column(
+    trip_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("routes.id", ondelete="CASCADE"),
         nullable=False,
@@ -127,7 +131,7 @@ class RouteVersion(Base):
     version_no: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(
         Enum(
-            RouteVersionStatus,
+            RouteStatus,
             name="route_version_status",
             create_type=False,
             values_callable=lambda enum: [e.value for e in enum]
@@ -158,13 +162,13 @@ class RouteVersion(Base):
     )
 
     # Relationships
-    route: Mapped["Route"] = relationship(
-        back_populates="versions",
-        foreign_keys=[route_id],
+    trip: Mapped["Trip"] = relationship(
+        back_populates="routes",
+        foreign_keys=[trip_id],
     )
     created_by: Mapped["AppUser"] = relationship()  # type: ignore
     checkpoints: Mapped[list["Checkpoint"]] = relationship(
-        back_populates="route_version",
+        back_populates="route",
         cascade="all, delete-orphan",
         order_by="Checkpoint.seq_no",
     )
@@ -185,12 +189,13 @@ class RouteVersion(Base):
 
 
 class Checkpoint(Base):
+    """A checkpoint is a point of interest along a route."""
     __tablename__ = "checkpoints"
 
     id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
     )
-    route_version_id: Mapped[UUID] = mapped_column(
+    route_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("route_versions.id", ondelete="CASCADE"),
         nullable=False,
@@ -222,7 +227,7 @@ class Checkpoint(Base):
     )
 
     # Relationships
-    route_version: Mapped["RouteVersion"] = relationship(back_populates="checkpoints")
+    route: Mapped["Route"] = relationship(back_populates="checkpoints")
     visited_points: Mapped[list["VisitedPoint"]] = relationship(
         back_populates="checkpoint",
         cascade="all, delete-orphan",
@@ -289,7 +294,8 @@ class VisitedPoint(Base):
     )
 
 
-class UserActiveRoute(Base):
+class UserActiveTrip(Base):
+    """Tracks a user's active trip session with a locked route version."""
     __tablename__ = "user_active_routes"
 
     id: Mapped[UUID] = mapped_column(
@@ -300,12 +306,12 @@ class UserActiveRoute(Base):
         ForeignKey("app_user.id", ondelete="CASCADE"),
         nullable=False,
     )
-    route_id: Mapped[UUID] = mapped_column(
+    trip_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("routes.id", ondelete="CASCADE"),
         nullable=False,
     )
-    locked_version_id: Mapped[UUID] = mapped_column(
+    locked_route_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("route_versions.id"),
         nullable=False,
@@ -325,8 +331,8 @@ class UserActiveRoute(Base):
 
     # Relationships
     user: Mapped["AppUser"] = relationship()  # type: ignore
-    route: Mapped["Route"] = relationship(back_populates="active_sessions")
-    locked_version: Mapped["RouteVersion"] = relationship()
+    trip: Mapped["Trip"] = relationship(back_populates="active_sessions")
+    locked_route: Mapped["Route"] = relationship()
 
     __table_args__ = (
         UniqueConstraint("user_id", "route_id", name="uq_user_active_route"),

@@ -8,7 +8,7 @@
 ## User Stories Editing Rules
 
 When editing `docs/user-stories.md`:
-
+- **Available for edit:** Stories in block "Новые пользовательские истории"
 - **Format:** "Как [роль], я хочу [что], чтобы [почему]" (15-30 words)
 - **Merge stories:** 60%+ overlap (same actor + goal + почему)
 - **Delete stories:** Epics ("вся часть", no acceptance criteria)

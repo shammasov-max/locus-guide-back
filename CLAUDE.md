@@ -30,7 +30,7 @@ All roles share an **Account** entity as their unified identity.
 
 See domain docs for ERDs, API routes, and patterns:
 - `docs/domains/auth.md` — Account, AuthIdentity, RefreshToken
-- `docs/domains/geo.md` — Country, City
+- `docs/domains/cities.md` — Country, City
 - `docs/domains/tours.md` — Tour, Route, Waypoint, Run
 
 ---

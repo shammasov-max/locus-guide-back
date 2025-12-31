@@ -76,6 +76,7 @@
 | **US-031** | Admin | I want to **manage editor permissions (list, assign/revoke by email, navigate to tours)** so that **I can control access** | 🟡 85% | Missing AC: endpoints, editor sees only their tours |
 | **US-034** | Editor | I want to **have automatic free access to my tours** so that **I can test in the app without purchasing** | 🟢 95% | — |
 | **US-040** | Editor | I want to **upload and replace audio files (single/batch) with auto-matching by pattern poi_{seq_no}.mp3** so that **I can efficiently populate tours** | 🟢 90% | — |
+| **US-054** | Editor | I want to **set and update the price for my tour** so that **I can monetize my content** | 🟢 95% | AC: price_usd $0.00-$99.99. Can update anytime (existing purchases unaffected). Required before publish. Free = $0. |
 
 ---
 
@@ -84,10 +85,15 @@
 | ID | Role | Story | Confidence | Comment |
 |---|---|---|---|---|
 | **US-013a** | User | I want to **listen to the first 4 waypoints free on each paid tour** so that **I can try the service without commitment** | 🟢 95% | — |
-| **US-013b** | User | I want to **purchase individual tours with desired language ($3-$8) via in-app purchase** so that **I only pay for what I need** | 🟠 60% | Purchase entity deferred |
+| **US-013b** | User | I want to **purchase a tour via in-app purchase** so that **I can access all content and languages** | 🟢 90% | AC: Purchase unlocks ALL available languages. Server validates receipt. Syncs across devices. Duplicate returns existing entitlement. Price set by Editor (see US-054). |
 | **US-015** | User | I want **fast seamless email authorization on launch** so that **I don't lose purchases when switching phones** | 🟢 90% | — |
-| **US-042** | User | I want to **purchase bundles (tour collections) with a discount** so that **I save when buying multiple tours** | 🟠 60% | Bundle entity deferred |
-| **US-043** | Admin | I want to **create and manage bundles (select tours, set price and discount)** so that **I can offer advantageous collections to users** | 🟠 60% | Bundle entity deferred |
+| **US-042** | User | I want to **purchase bundles with discount** so that **I save when buying multiple tours** | 🟢 90% | AC: Shows original crossed out + discounted price. Cannot buy if owns ALL tours. Full price if owns SOME (no partial credit). Creates access to all contained tours. Min 2 tours. |
+| **US-043** | Admin | I want to **create and manage bundles** so that **I can offer advantageous collections to users** | 🟢 90% | AC: Add/remove tours from draft. Admin sets price, system shows discount %. Published bundle cannot remove tours (deactivate only). Same tour can be in multiple bundles. Optional city_id. |
+
+> **Deferred System Stories** (implement during store integration):
+> - US-044: Receipt validation (Apple/Google server-side validation)
+> - US-045: Purchase restore on new device
+> - US-046: Refund/revocation handling via webhooks
 
 ---
 
@@ -116,9 +122,9 @@
 
 | Confidence | Count | % |
 |---|---|---|
-| 🟢 90-100% | 24 | 75% |
+| 🟢 90-100% | 28 | 85% |
 | 🟡 70-89% | 3 | 9% |
-| 🟠 50-69% | 5 | 16% |
+| 🟠 50-69% | 2 | 6% |
 | 🔴 <50% | 0 | 0% |
 
 ---
@@ -128,7 +134,7 @@
 | Role | User Stories |
 |---|---|
 | User | US-001..004, US-010..013, US-021, US-025..028, US-030, US-030b, US-030c, US-036, US-036b, US-042 |
-| Editor | US-019, US-020, US-033, US-034, US-037, US-039..041, US-052, US-053 |
+| Editor | US-019, US-020, US-033, US-034, US-037, US-039..041, US-052, US-053, US-054 |
 | Admin | US-031, US-043 |
 | System | — |
 
@@ -145,4 +151,4 @@ Decisions delegated to frontend (backend only stores state):
 
 ---
 
-*Generated: 2025-12-30 | Updated: 2025-12-31 (Spec-panel review: +AC for 10 stories, +US-030b/030c, terminology fixes, see decisions.md)*
+*Generated: 2025-12-30 | Updated: 2025-12-31 (Spec-panel: US-013b/042/043→90%, +US-044/045/046 deferred, +US-054 tour pricing)*

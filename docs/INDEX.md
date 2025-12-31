@@ -61,6 +61,20 @@ app/
 └── main.py
 ```
 
+## API Routes
+
+All domains share `/api/v1` base path:
+
+```
+/api/v1/auth/*     ← Auth endpoints (register, login, me)
+/api/v1/geo/*      ← Geo endpoints (autocomplete, languages)
+/api/v1/tours/*    ← Tour catalog
+/api/v1/cities/*   ← Cities with tours
+/api/v1/runs/*     ← User run progress
+/api/v1/editor/*   ← Editor tools
+/api/v1/admin/*    ← Admin management
+```
+
 ## Notation
 
 *Used in ERD diagrams:*

@@ -208,24 +208,24 @@ class TestRoutesEndpoints:
         )
         assert response.status_code == 200
 
-    def test_get_nonexistent_trip(self):
-        """Getting non-existent trip returns 404"""
+    def test_get_nonexistent_tour(self):
+        """Getting non-existent tour returns 404"""
         fake_uuid = "00000000-0000-0000-0000-000000000000"
         response = client.get(f"/api/v1/routes/{fake_uuid}")
         assert response.status_code == 404
 
-    def test_create_trip_requires_auth(self):
-        """Creating trip requires authentication"""
+    def test_create_tour_requires_auth(self):
+        """Creating tour requires authentication"""
         response = client.post(
             "/api/v1/routes/admin",
-            json={"city_id": 1, "slug": "test-trip"}
+            json={"city_id": 1, "slug": "test-tour"}
         )
         assert response.status_code == 401
 
     def test_my_routes_requires_auth(self):
         """My routes endpoint requires authentication"""
         response = client.get("/api/v1/routes/me")
-        # Could be 401 or 422 if trip doesn't exist
+        # Could be 401 or 422 if tour doesn't exist
         assert response.status_code in [401, 422]
 
 
@@ -248,8 +248,8 @@ class TestWishesEndpoints:
             token = data["access_token"]
         return {"Authorization": f"Bearer {token}"}
 
-    def test_wish_trip_requires_auth(self):
-        """Wishing a trip requires authentication"""
+    def test_wish_tour_requires_auth(self):
+        """Wishing a tour requires authentication"""
         fake_uuid = "00000000-0000-0000-0000-000000000000"
         response = client.post(f"/api/v1/wishes/routes/{fake_uuid}/wish")
         assert response.status_code == 401
@@ -304,8 +304,8 @@ class TestAPIValidation:
         )
         assert response.status_code == 422
 
-    def test_trips_invalid_uuid(self):
-        """Trips endpoint validates UUID format"""
+    def test_tours_invalid_uuid(self):
+        """Tours endpoint validates UUID format"""
         response = client.get("/api/v1/routes/not-a-uuid")
         assert response.status_code == 422
 

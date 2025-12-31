@@ -1,4 +1,4 @@
-"""Purchases module - user trip purchases and access control."""
+"""Purchases module - user tour purchases and access control."""
 
 from app.purchases.models import UserPurchase
 

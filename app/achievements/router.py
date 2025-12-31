@@ -96,8 +96,8 @@ async def check_achievements(
     Check and award any new achievements for current user.
 
     This endpoint should be called after:
-    - Completing a trip
-    - Starting a trip in a new city
+    - Completing a tour
+    - Starting a tour in a new city
     - Any other action that might trigger an achievement
 
     Returns list of newly earned achievements.
@@ -124,18 +124,18 @@ async def get_achievement_progress(
     Get user's progress toward achievements.
 
     Returns:
-    - Current trip and city counts
+    - Current tour and city counts
     - Next achievement to earn in each category
-    - How many more trips/cities needed
+    - How many more tours/cities needed
     """
     progress = await service.get_achievement_progress(db, current_user.id, lang)
 
     return AchievementProgressResponse(
-        trips_completed=progress["trips_completed"],
+        tours_completed=progress["tours_completed"],
         cities_visited=progress["cities_visited"],
-        next_trip_achievement=(
-            _achievement_to_response(progress["next_trip_achievement"], lang)
-            if progress["next_trip_achievement"]
+        next_tour_achievement=(
+            _achievement_to_response(progress["next_tour_achievement"], lang)
+            if progress["next_tour_achievement"]
             else None
         ),
         next_city_achievement=(
@@ -143,6 +143,6 @@ async def get_achievement_progress(
             if progress["next_city_achievement"]
             else None
         ),
-        trips_to_next=progress["trips_to_next"],
+        tours_to_next=progress["tours_to_next"],
         cities_to_next=progress["cities_to_next"],
     )

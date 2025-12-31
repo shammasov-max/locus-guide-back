@@ -36,8 +36,8 @@ class PurchaseListResponse(BaseModel):
     count: int
 
 
-class TripAccessResponse(BaseModel):
-    """Response indicating user's access level to a trip."""
+class TourAccessResponse(BaseModel):
+    """Response indicating user's access level to a tour."""
 
     route_id: UUID
     has_full_access: bool
@@ -45,13 +45,13 @@ class TripAccessResponse(BaseModel):
     free_checkpoints_limit: int | None = None
 
 
-class TripAccessCheckRequest(BaseModel):
-    """Request to check access for multiple trips."""
+class TourAccessCheckRequest(BaseModel):
+    """Request to check access for multiple tours."""
 
     route_ids: list[UUID]
 
 
-class TripAccessBatchResponse(BaseModel):
-    """Batch response for trip access check."""
+class TourAccessBatchResponse(BaseModel):
+    """Batch response for tour access check."""
 
-    access: dict[str, TripAccessResponse]  # route_id -> access info
+    access: dict[str, TourAccessResponse]  # route_id -> access info

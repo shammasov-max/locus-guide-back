@@ -13,9 +13,9 @@ from app.purchases.schemas import (
     PurchaseVerifyRequest,
     PurchaseResponse,
     PurchaseListResponse,
-    TripAccessResponse,
-    TripAccessCheckRequest,
-    TripAccessBatchResponse,
+    TourAccessResponse,
+    TourAccessCheckRequest,
+    TourAccessBatchResponse,
 )
 from app.routes.models import Route
 from fastapi import Depends
@@ -46,14 +46,14 @@ async def verify_purchase(
     Note: Actual receipt validation with Apple/Google servers
     should be implemented in service layer.
     """
-    # Check if trip exists
+    # Check if tour exists
     result = await db.execute(select(Route).where(Route.id == request.route_id))
-    trip = result.scalar_one_or_none()
+    tour = result.scalar_one_or_none()
 
-    if not trip:
+    if not tour:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Trip not found",
+            detail="Tour not found",
         )
 
     # Check if already purchased
@@ -69,9 +69,9 @@ async def verify_purchase(
     # 3. Create purchase record only if validation succeeds
 
     # Get price from published version
-    if trip.published_version:
-        amount = trip.published_version.price_amount or 0
-        currency = trip.published_version.price_currency or "USD"
+    if tour.published_version:
+        amount = tour.published_version.price_amount or 0
+        currency = tour.published_version.price_currency or "USD"
     else:
         amount = 0
         currency = "USD"
@@ -107,41 +107,41 @@ async def get_my_purchases(
 
 @router.get(
     "/routes/{route_id}/access",
-    response_model=TripAccessResponse,
+    response_model=TourAccessResponse,
 )
-async def check_trip_access(
+async def check_tour_access(
     route_id: UUID,
     current_user: CurrentUser,
     db: DbSession,
 ):
     """
-    Check user's access level to a trip.
+    Check user's access level to a tour.
 
     Returns access information including:
     - Whether user has full access
     - Reason for access (purchased, editor, free_preview, none)
     - Number of free checkpoints if in free preview mode
     """
-    access = await service.check_trip_access(db, current_user, route_id)
+    access = await service.check_tour_access(db, current_user, route_id)
     return access
 
 
 @router.post(
     "/routes/access/batch",
-    response_model=TripAccessBatchResponse,
+    response_model=TourAccessBatchResponse,
 )
-async def check_trips_access_batch(
-    request: TripAccessCheckRequest,
+async def check_tours_access_batch(
+    request: TourAccessCheckRequest,
     current_user: CurrentUser,
     db: DbSession,
 ):
     """
-    Check access for multiple trips at once.
+    Check access for multiple tours at once.
 
-    Useful for trip listing pages where access status
-    needs to be shown for multiple trips.
+    Useful for tour listing pages where access status
+    needs to be shown for multiple tours.
     """
-    access = await service.check_trips_access_batch(
+    access = await service.check_tours_access_batch(
         db, current_user, request.route_ids
     )
-    return TripAccessBatchResponse(access=access)
+    return TourAccessBatchResponse(access=access)

@@ -5,7 +5,7 @@ Revises: 001_initial
 Create Date: 2025-12-30
 
 Implements:
-- US-033: Draft GeoJSON for trips
+- US-033: Draft GeoJSON for tours
 - US-040: Audio URLs for checkpoints
 - US-041: Languages as HSTORE (ready/not ready)
 - US-011i: Selected character for users
@@ -60,14 +60,14 @@ def upgrade() -> None:
     )
 
     # 5. wished_routes.notify_on_publish (US-030)
-    # Note: wished_routes table represents user wishes for Trip entities
+    # Note: wished_routes table represents user wishes for Tour entities
     op.add_column(
         "wished_routes",
         sa.Column("notify_on_publish", sa.Boolean(), server_default="true", nullable=False),
     )
 
     # 6. wanted_cities.notify_on_first_route (US-030)
-    # Note: notify_on_first_route means notification when first Trip is published for wanted city
+    # Note: notify_on_first_route means notification when first Tour is published for wanted city
     op.add_column(
         "wanted_cities",
         sa.Column("notify_on_first_route", sa.Boolean(), server_default="true", nullable=False),
@@ -76,7 +76,7 @@ def upgrade() -> None:
     # ==================== NEW TABLES ====================
 
     # 7. user_purchases table (US-013b)
-    # Note: route_id foreign key references trips (routes table represents Trip entities)
+    # Note: route_id foreign key references tours (routes table represents Tour entities)
     op.create_table(
         "user_purchases",
         sa.Column(
@@ -138,15 +138,15 @@ def upgrade() -> None:
     op.create_index("idx_user_achievements_user", "user_achievements", ["user_id"])
 
     # ==================== SEED ACHIEVEMENTS DATA ====================
-    # Note: Achievement descriptions reference "trips" conceptually (category='routes' is the table name)
+    # Note: Achievement descriptions reference "tours" conceptually (category='routes' is the table name)
     op.execute("""
         INSERT INTO achievements (code, title_i18n, description_i18n, category, threshold) VALUES
-        ('first_steps', 'en => "First Steps", ru => "Первые шаги"', 'en => "Complete your first trip", ru => "Завершите свой первый маршрут"', 'routes', 1),
-        ('curious', 'en => "Curious", ru => "Любопытный"', 'en => "Complete 5 trips", ru => "Завершите 5 маршрутов"', 'routes', 5),
-        ('explorer', 'en => "Explorer", ru => "Исследователь"', 'en => "Complete 15 trips", ru => "Завершите 15 маршрутов"', 'routes', 15),
-        ('traveler', 'en => "Traveler", ru => "Путешественник"', 'en => "Complete 30 trips", ru => "Завершите 30 маршрутов"', 'routes', 30),
-        ('nomad', 'en => "Nomad", ru => "Номад"', 'en => "Complete 50 trips", ru => "Завершите 50 маршрутов"', 'routes', 50),
-        ('road_legend', 'en => "Road Legend", ru => "Легенда дорог"', 'en => "Complete 100 trips", ru => "Завершите 100 маршрутов"', 'routes', 100),
+        ('first_steps', 'en => "First Steps", ru => "Первые шаги"', 'en => "Complete your first tour", ru => "Завершите свой первый маршрут"', 'routes', 1),
+        ('curious', 'en => "Curious", ru => "Любопытный"', 'en => "Complete 5 tours", ru => "Завершите 5 маршрутов"', 'routes', 5),
+        ('explorer', 'en => "Explorer", ru => "Исследователь"', 'en => "Complete 15 tours", ru => "Завершите 15 маршрутов"', 'routes', 15),
+        ('traveler', 'en => "Traveler", ru => "Путешественник"', 'en => "Complete 30 tours", ru => "Завершите 30 маршрутов"', 'routes', 30),
+        ('nomad', 'en => "Nomad", ru => "Номад"', 'en => "Complete 50 tours", ru => "Завершите 50 маршрутов"', 'routes', 50),
+        ('road_legend', 'en => "Road Legend", ru => "Легенда дорог"', 'en => "Complete 100 tours", ru => "Завершите 100 маршрутов"', 'routes', 100),
         ('tourist', 'en => "Tourist", ru => "Турист"', 'en => "Visit 3 cities", ru => "Посетите 3 города"', 'cities', 3),
         ('cosmopolitan', 'en => "Cosmopolitan", ru => "Космополит"', 'en => "Visit 10 cities", ru => "Посетите 10 городов"', 'cities', 10),
         ('world_citizen', 'en => "World Citizen", ru => "Гражданин мира"', 'en => "Visit 25 cities", ru => "Посетите 25 городов"', 'cities', 25),

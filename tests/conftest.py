@@ -33,7 +33,7 @@ def setup_test_database():
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS hstore"))
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
-        # Create trip enums
+        # Create tour enums
         conn.execute(text("""
             DO $$ BEGIN
                 CREATE TYPE route_status AS ENUM ('draft', 'published', 'coming_soon', 'archived');

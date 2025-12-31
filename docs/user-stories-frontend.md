@@ -21,7 +21,7 @@
 | **US-008-FE** | User | I want to **see a progress bar with seek capability** so that **I can re-listen to interesting parts** | 🟢 95% | — |
 | **US-011-FE** | User | I want to **hear navigation hints (e.g. "turn left around the fountain to the red building") that smoothly interrupt current voice and continue from -2sec after the hint** so that **I don't get lost** | 🟢 90% | — |
 | **US-011b-FE** | User | I want **meetsound.mp3 to play when entering a new GPS zone; if current zone ends — start the one entered earlier (even if moved away); if left zone 2 and moved to zone 3, then after zone 1 plays zone 3, and zone 2 = "visited by GPS" (not played, but marked in database for manual listening)** so that **I don't miss points** | 🟢 90% | — |
-| **US-011c-FE** | User | I want **points with delta number >5 from current not to auto-play when on the trip line** so that **I avoid false triggers at intersections** | 🟡 80% | Missing condition: "didn't deviate from trip line" |
+| **US-011c-FE** | User | I want **points with delta number >5 from current not to auto-play when on the tour line** so that **I avoid false triggers at intersections** | 🟡 80% | Missing condition: "didn't deviate from tour line" |
 | **US-011d-FE** | User | I want **pause to disable GPS, play to resume, and leaving zone without unpausing to enable GPS** so that **I can rest** | 🟡 85% | Added clarification about leaving zone |
 | **US-022-FE** | User | I want to **see and control playback from lock screen** so that **I don't need to unlock my phone** | 🟢 90% | Original: "this is default on iPhone". Previously US-012b (duplicate) |
 
@@ -32,7 +32,7 @@
 | ID | Role | Story | Confidence | Comment |
 |---|---|---|---|---|
 | **US-011e-FE** | User | I want to **see an auto-play mode indicator (GPS on/off)** so that **I can manage battery** | 🟡 70% | Original suggests: "cat appears when GPS on" |
-| **US-011f-FE** | User | I want **GPS to turn on when entering a trip and turn off when returning to the list** so that **I don't have to manage it manually** | 🟢 90% | — |
+| **US-011f-FE** | User | I want **GPS to turn on when entering a tour and turn off when returning to the list** so that **I don't have to manage it manually** | 🟢 90% | — |
 | **US-011g-FE** | User | I want **the cat to face the direction of the top of the phone** so that **I can orient myself on location** | 🟢 95% | — |
 | **US-011h-FE** | User | I want **the cat to walk (walking animation) in the direction of movement** so that **I associate it with a game guide** | 🟢 95% | — |
 | **US-012c-FE** | User | I want to **see points in different colors (purple/green/blue/orange) and numbers** so that **I understand completion status** | 🟢 90% | — |
@@ -45,7 +45,7 @@
    - **Green** — automatically started by GPS and fully listened
    - **Blue** — started manually, not listened to completion
    - **Orange** — listened manually to completion without GPS presence
-4. **Trip line:** changes color to the color of listened point, if previous point is not purple
+4. **Tour line:** changes color to the color of listened point, if previous point is not purple
 5. **RESOLVED: GPS_QUEUED state** — frontend-side solution (backend stores `visited_by_gps: bool` state)
 
 ---
@@ -62,7 +62,7 @@
 
 | ID | Role | Story | Confidence | Comment |
 |---|---|---|---|---|
-| **US-016-FE** | Admin | I want to **show 1000 cities with "in development" label and notification subscription** so that **I create an illusion of a large catalog and measure demand** | 🟢 90% | Ads targeted to cities where trips exist |
+| **US-016-FE** | Admin | I want to **show 1000 cities with "in development" label and notification subscription** so that **I create an illusion of a large catalog and measure demand** | 🟢 90% | Ads targeted to cities where tours exist |
 | **US-017b-FE** | Admin | I want to **capture click_id and UTM on install via Firebase Dynamic Links (Deferred Deep Link)** so that **I can attribute installs to Instagram/TikTok campaigns** | 🟢 90% | — |
 
 ---
@@ -91,7 +91,7 @@
 
 | ID | Issue |
 |---|---|
-| 🟡 **US-011c-FE** | Missing condition: "didn't deviate from trip line" |
+| 🟡 **US-011c-FE** | Missing condition: "didn't deviate from tour line" |
 | 🟡 **US-011d-FE** | Added clarification about leaving zone |
 | 🟡 **US-011e-FE** | Possible implementation: "cat appears when GPS on" |
 

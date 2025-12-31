@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 # ============ Type Aliases ============
 
-TripStatusType = Literal["draft", "published", "coming_soon", "archived"]
+TourStatusType = Literal["draft", "published", "coming_soon", "archived"]
 RouteStatusType = Literal["draft", "review", "published", "superseded"]
 AudioListenStatusType = Literal["none", "started", "completed"]
 CompletionTypeValue = Literal["manual", "automatic"]
@@ -41,8 +41,8 @@ class CheckpointProgressResponse(CheckpointResponse):
     audio_completed_at: datetime | None = None
 
 
-class UserTripProgress(BaseModel):
-    """User's progress on a trip"""
+class UserTourProgress(BaseModel):
+    """User's progress on a tour"""
     started_at: datetime | None = None
     completed_at: datetime | None = None
     completion_type: CompletionTypeValue | None = None
@@ -52,11 +52,11 @@ class UserTripProgress(BaseModel):
     progress_percent: float = 0.0
 
 
-class TripListItem(BaseModel):
-    """Trip summary for list views"""
+class TourListItem(BaseModel):
+    """Tour summary for list views"""
     id: UUID
     slug: str
-    status: TripStatusType
+    status: TourStatusType
     title: str  # From current route
     summary: str | None
     duration_min: int | None
@@ -70,17 +70,17 @@ class TripListItem(BaseModel):
     city_id: int
     city_name: str
     checkpoint_count: int
-    user_progress: "UserTripProgress | None" = None
-    is_wished: bool = False  # True if user has active wish for this trip
+    user_progress: "UserTourProgress | None" = None
+    is_wished: bool = False  # True if user has active wish for this tour
 
     model_config = {"from_attributes": True}
 
 
-class TripDetailResponse(BaseModel):
-    """Complete trip details"""
+class TourDetailResponse(BaseModel):
+    """Complete tour details"""
     id: UUID
     slug: str
-    status: TripStatusType
+    status: TourStatusType
     city_id: int
     city_name: str
     route_id: UUID
@@ -99,28 +99,28 @@ class TripDetailResponse(BaseModel):
     checkpoint_count: int
     created_at: datetime
     published_at: datetime | None
-    user_progress: "UserTripProgress | None" = None
+    user_progress: "UserTourProgress | None" = None
 
     model_config = {"from_attributes": True}
 
 
-class UserActiveTripResponse(BaseModel):
-    """User's active trip with locked route"""
+class UserActiveTourResponse(BaseModel):
+    """User's active tour with locked route"""
     id: UUID
-    trip: TripListItem
+    tour: TourListItem
     locked_route_id: UUID
     started_at: datetime
     completed_at: datetime | None
     completion_type: CompletionTypeValue | None
-    progress: UserTripProgress
+    progress: UserTourProgress
 
     model_config = {"from_attributes": True}
 
 
-class TripListResponse(BaseModel):
-    """Paginated list of trips"""
+class TourListResponse(BaseModel):
+    """Paginated list of tours"""
     count: int
-    trips: list[TripListItem]
+    tours: list[TourListItem]
 
 
 # ============ Request Schemas ============
@@ -136,29 +136,29 @@ class UpdateAudioStatusRequest(BaseModel):
     status: AudioListenStatusType
 
 
-class StartTripRequest(BaseModel):
-    """Start a new trip (empty for now, could add language preference later)"""
+class StartTourRequest(BaseModel):
+    """Start a new tour (empty for now, could add language preference later)"""
     pass
 
 
-class FinishTripRequest(BaseModel):
-    """Finish a trip (empty for now, could add feedback later)"""
+class FinishTourRequest(BaseModel):
+    """Finish a tour (empty for now, could add feedback later)"""
     pass
 
 
 # ============ Admin Request Schemas ============
 
-class TripCreateRequest(BaseModel):
-    """Create a new trip"""
+class TourCreateRequest(BaseModel):
+    """Create a new tour"""
     city_id: int = Field(..., description="City geonameid")
-    slug: str = Field(..., min_length=1, max_length=100, description="URL-friendly trip identifier")
-    status: TripStatusType = "draft"
+    slug: str = Field(..., min_length=1, max_length=100, description="URL-friendly tour identifier")
+    status: TourStatusType = "draft"
 
 
-class TripUpdateRequest(BaseModel):
-    """Update trip metadata"""
+class TourUpdateRequest(BaseModel):
+    """Update tour metadata"""
     slug: str | None = None
-    status: TripStatusType | None = None
+    status: TourStatusType | None = None
 
 
 class RouteCreateRequest(BaseModel):
@@ -206,13 +206,13 @@ class CheckpointUpdateRequest(BaseModel):
 
 # ============ Admin Response Schemas ============
 
-class TripAdminResponse(BaseModel):
-    """Trip for admin views (includes all routes)"""
+class TourAdminResponse(BaseModel):
+    """Tour for admin views (includes all routes)"""
     id: UUID
     city_id: int
     city_name: str
     slug: str
-    status: TripStatusType
+    status: TourStatusType
     published_route_id: UUID | None
     created_by_user_id: int
     created_at: datetime
@@ -225,7 +225,7 @@ class TripAdminResponse(BaseModel):
 class RouteAdminResponse(BaseModel):
     """Route for admin views"""
     id: UUID
-    trip_id: UUID
+    tour_id: UUID
     version_no: int
     status: RouteStatusType
     title_i18n: dict[str, str]
@@ -273,6 +273,6 @@ class CheckpointAdminResponse(BaseModel):
 
 
 class RoutesListResponse(BaseModel):
-    """List of routes for a trip"""
-    trip_id: UUID
+    """List of routes for a tour"""
+    tour_id: UUID
     routes: list[RouteAdminResponse]

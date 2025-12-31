@@ -8,14 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import AppUser
 from app.purchases.models import UserPurchase
-from app.purchases.schemas import TripAccessResponse
-from app.routes.models import Route, RouteVersion
+from app.purchases.schemas import TourAccessResponse
+from app.routes.models import Tour, Route
 
 
 async def get_user_purchase(
     db: AsyncSession, user_id: int, route_id: UUID
 ) -> UserPurchase | None:
-    """Get user's purchase for a specific trip."""
+    """Get user's purchase for a specific tour."""
     result = await db.execute(
         select(UserPurchase).where(
             UserPurchase.user_id == user_id,
@@ -59,37 +59,37 @@ async def create_purchase(
     return purchase
 
 
-async def check_trip_access(
+async def check_tour_access(
     db: AsyncSession, user: AppUser, route_id: UUID
-) -> TripAccessResponse:
-    """Check user's access level to a trip (US-034).
+) -> TourAccessResponse:
+    """Check user's access level to a tour (US-034).
 
     Access rules:
-    1. Editor who created the trip has free full access
-    2. User who purchased the trip has full access
+    1. Editor who created the tour has free full access
+    2. User who purchased the tour has full access
     3. Otherwise, only free preview checkpoints are accessible
     """
-    # Get trip with published version
+    # Get tour with published version
     result = await db.execute(
-        select(Route, RouteVersion)
-        .outerjoin(RouteVersion, Route.published_version_id == RouteVersion.id)
-        .where(Route.id == route_id)
+        select(Tour, Route)
+        .outerjoin(Route, Tour.published_route_id == Route.id)
+        .where(Tour.id == route_id)
     )
     row = result.one_or_none()
 
     if not row:
-        return TripAccessResponse(
+        return TourAccessResponse(
             route_id=route_id,
             has_full_access=False,
             access_reason="none",
             free_checkpoints_limit=0,
         )
 
-    trip, version = row
+    tour, route = row
 
-    # US-034: Editor free access to their own trips
-    if trip.created_by_user_id == user.id:
-        return TripAccessResponse(
+    # US-034: Editor free access to their own tours
+    if tour.created_by_user_id == user.id:
+        return TourAccessResponse(
             route_id=route_id,
             has_full_access=True,
             access_reason="editor",
@@ -98,15 +98,15 @@ async def check_trip_access(
     # Check for purchase
     purchase = await get_user_purchase(db, user.id, route_id)
     if purchase:
-        return TripAccessResponse(
+        return TourAccessResponse(
             route_id=route_id,
             has_full_access=True,
             access_reason="purchased",
         )
 
     # Free preview only
-    free_limit = version.free_checkpoint_limit if version else 0
-    return TripAccessResponse(
+    free_limit = route.free_checkpoint_limit if route else 0
+    return TourAccessResponse(
         route_id=route_id,
         has_full_access=False,
         access_reason="free_preview",
@@ -114,12 +114,12 @@ async def check_trip_access(
     )
 
 
-async def check_trips_access_batch(
+async def check_tours_access_batch(
     db: AsyncSession, user: AppUser, route_ids: list[UUID]
-) -> dict[str, TripAccessResponse]:
-    """Check access for multiple trips at once."""
+) -> dict[str, TourAccessResponse]:
+    """Check access for multiple tours at once."""
     result = {}
     for route_id in route_ids:
-        access = await check_trip_access(db, user, route_id)
+        access = await check_tour_access(db, user, route_id)
         result[str(route_id)] = access
     return result

@@ -7,8 +7,8 @@ from geoalchemy2.shape import to_shape, from_shape
 from shapely.geometry import LineString, Point, shape
 
 from app.routes.models import (
-    Trip, Route, Checkpoint, VisitedPoint, UserActiveTrip,
-    TripStatus, RouteStatus, AudioListenStatus, CompletionType
+    Tour, Route, Checkpoint, VisitedPoint, UserActiveTour,
+    TourStatus, RouteStatus, AudioListenStatus, CompletionType
 )
 from app.cities.models import City
 
@@ -60,13 +60,13 @@ class RouteService:
             "progress_percent": round(progress_pct, 1)
         }
 
-    def _check_automatic_completion(self, user_id: int, trip_id: UUID) -> bool:
+    def _check_automatic_completion(self, user_id: int, tour_id: UUID) -> bool:
         """Check if all checkpoints done and auto-complete if so"""
         # Get user's active session
-        session = self.db.query(UserActiveTrip).filter(
-            UserActiveTrip.user_id == user_id,
-            UserActiveTrip.trip_id == trip_id,
-            UserActiveTrip.completed_at == None
+        session = self.db.query(UserActiveTour).filter(
+            UserActiveTour.user_id == user_id,
+            UserActiveTour.tour_id == tour_id,
+            UserActiveTour.completed_at == None
         ).first()
 
         if not session:
@@ -86,7 +86,7 @@ class RouteService:
 
     # ========== Read Operations ==========
 
-    def list_trips(
+    def list_tours(
         self,
         user_id: int | None = None,
         city_id: int | None = None,
@@ -100,21 +100,21 @@ class RouteService:
         offset: int = 0,
         lang: str = "en"
     ) -> dict:
-        """List trips with filters"""
-        # Base query: published trips with their published routes
-        query = self.db.query(Trip).join(
-            Route, Trip.published_route_id == Route.id
-        ).filter(Trip.status == TripStatus.PUBLISHED)
+        """List tours with filters"""
+        # Base query: published tours with their published routes
+        query = self.db.query(Tour).join(
+            Route, Tour.published_route_id == Route.id
+        ).filter(Tour.status == TourStatus.PUBLISHED)
 
         # Filter by city
         if city_id:
-            query = query.filter(Trip.city_id == city_id)
+            query = query.filter(Tour.city_id == city_id)
 
         # Filter by status
         if status_filter:
-            statuses = [TripStatus(s) for s in status_filter if s in TripStatus.__members__.values()]
+            statuses = [TourStatus(s) for s in status_filter if s in TourStatus.__members__.values()]
             if statuses:
-                query = query.filter(Trip.status.in_(statuses))
+                query = query.filter(Tour.status.in_(statuses))
 
         # Filter by search query in title/summary for specified language
         if search:
@@ -158,35 +158,35 @@ class RouteService:
         if wished is not None and user_id:
             from app.wishes.models import WishedRoute
             if wished:
-                # Only trips user has wished
+                # Only tours user has wished
                 query = query.join(
                     WishedRoute,
                     and_(
-                        WishedRoute.route_id == Trip.id,
+                        WishedRoute.route_id == Tour.id,
                         WishedRoute.user_id == user_id,
                         WishedRoute.is_active == True  # noqa: E712
                     )
                 )
             else:
-                # Exclude trips user has wished
+                # Exclude tours user has wished
                 wished_subq = self.db.query(WishedRoute.route_id).filter(
                     WishedRoute.user_id == user_id,
                     WishedRoute.is_active == True  # noqa: E712
                 ).subquery()
-                query = query.filter(~Trip.id.in_(select(wished_subq)))
+                query = query.filter(~Tour.id.in_(select(wished_subq)))
 
         count = query.count()
-        trips = query.offset(offset).limit(limit).all()
+        tours = query.offset(offset).limit(limit).all()
 
-        if not trips:
-            return {"count": count, "trips": []}
+        if not tours:
+            return {"count": count, "tours": []}
 
         # Batch fetch related data to avoid N+1 queries
-        trip_ids = [t.id for t in trips]
-        route_ids = [t.published_route_id for t in trips]
+        tour_ids = [t.id for t in tours]
+        route_ids = [t.published_route_id for t in tours]
 
         # Batch fetch cities
-        city_ids = [t.city_id for t in trips]
+        city_ids = [t.city_id for t in tours]
         cities = {
             c.geonameid: c
             for c in self.db.query(City).filter(City.geonameid.in_(city_ids)).all()
@@ -204,38 +204,38 @@ class RouteService:
         )
 
         # Batch fetch wish statuses for user
-        wished_trip_ids = set()
+        wished_tour_ids = set()
         if user_id:
             from app.wishes.models import WishedRoute
-            wished_trip_ids = {
+            wished_tour_ids = {
                 r.route_id for r in self.db.query(WishedRoute.route_id).filter(
                     WishedRoute.user_id == user_id,
-                    WishedRoute.route_id.in_(trip_ids),
+                    WishedRoute.route_id.in_(tour_ids),
                     WishedRoute.is_active == True  # noqa: E712
                 ).all()
             }
 
-        # Batch fetch active trips for user
-        active_trips = {}
+        # Batch fetch active tours for user
+        active_tours = {}
         if user_id:
-            active_trips = {
-                at.trip_id: at for at in self.db.query(UserActiveTrip).filter(
-                    UserActiveTrip.user_id == user_id,
-                    UserActiveTrip.trip_id.in_(trip_ids)
+            active_tours = {
+                at.tour_id: at for at in self.db.query(UserActiveTour).filter(
+                    UserActiveTour.user_id == user_id,
+                    UserActiveTour.tour_id.in_(tour_ids)
                 ).all()
             }
 
         result = []
-        for trip in trips:
-            route = trip.published_route
-            city = cities.get(trip.city_id)
+        for tour in tours:
+            route = tour.published_route
+            city = cities.get(tour.city_id)
             checkpoint_count = checkpoint_counts.get(route.id, 0)
-            is_wished = trip.id in wished_trip_ids
+            is_wished = tour.id in wished_tour_ids
 
             item = {
-                "id": trip.id,
-                "slug": trip.slug,
-                "status": trip.status.value,
+                "id": tour.id,
+                "slug": tour.slug,
+                "status": tour.status.value,
                 "title": self._resolve_i18n(route.title_i18n, lang),
                 "summary": self._resolve_i18n(route.summary_i18n, lang) if route.summary_i18n else None,
                 "duration_min": route.duration_min,
@@ -246,7 +246,7 @@ class RouteService:
                 "free_checkpoint_limit": route.free_checkpoint_limit,
                 "price_amount": route.price_amount,
                 "price_currency": route.price_currency,
-                "city_id": trip.city_id,
+                "city_id": tour.city_id,
                 "city_name": city.name if city else "",
                 "checkpoint_count": checkpoint_count,
                 "user_progress": None,
@@ -255,7 +255,7 @@ class RouteService:
 
             # Add user progress if authenticated
             if user_id:
-                active = active_trips.get(trip.id)
+                active = active_tours.get(tour.id)
                 if active:
                     progress = self._calculate_user_progress(user_id, active.locked_route_id)
                     item["user_progress"] = {
@@ -267,16 +267,16 @@ class RouteService:
 
             result.append(item)
 
-        return {"count": count, "trips": result}
+        return {"count": count, "tours": result}
 
-    def get_trip_detail(self, trip_id: UUID, user_id: int | None = None, lang: str = "en") -> dict | None:
-        """Get full trip details"""
-        trip = self.db.query(Trip).filter(Trip.id == trip_id).first()
-        if not trip or not trip.published_route_id:
+    def get_tour_detail(self, tour_id: UUID, user_id: int | None = None, lang: str = "en") -> dict | None:
+        """Get full tour details"""
+        tour = self.db.query(Tour).filter(Tour.id == tour_id).first()
+        if not tour or not tour.published_route_id:
             return None
 
-        route = trip.published_route
-        city = self.db.query(City).filter(City.geonameid == trip.city_id).first()
+        route = tour.published_route
+        city = self.db.query(City).filter(City.geonameid == tour.city_id).first()
 
         checkpoint_count = self.db.query(func.count(Checkpoint.id)).filter(
             Checkpoint.route_id == route.id,
@@ -284,10 +284,10 @@ class RouteService:
         ).scalar() or 0
 
         result = {
-            "id": trip.id,
-            "slug": trip.slug,
-            "status": trip.status.value,
-            "city_id": trip.city_id,
+            "id": tour.id,
+            "slug": tour.slug,
+            "status": tour.status.value,
+            "city_id": tour.city_id,
             "city_name": city.name if city else "",
             "route_id": route.id,
             "version_no": route.version_no,
@@ -303,15 +303,15 @@ class RouteService:
             "price_amount": route.price_amount,
             "price_currency": route.price_currency,
             "checkpoint_count": checkpoint_count,
-            "created_at": trip.created_at,
+            "created_at": tour.created_at,
             "published_at": route.published_at,
             "user_progress": None
         }
 
         if user_id:
-            active = self.db.query(UserActiveTrip).filter(
-                UserActiveTrip.user_id == user_id,
-                UserActiveTrip.trip_id == trip.id
+            active = self.db.query(UserActiveTour).filter(
+                UserActiveTour.user_id == user_id,
+                UserActiveTour.tour_id == tour.id
             ).first()
             if active:
                 progress = self._calculate_user_progress(user_id, active.locked_route_id)
@@ -324,24 +324,24 @@ class RouteService:
 
         return result
 
-    def get_trip_checkpoints(
+    def get_tour_checkpoints(
         self,
-        trip_id: UUID,
+        tour_id: UUID,
         user_id: int | None = None,
         lang: str = "en"
     ) -> list[dict]:
-        """Get checkpoints for a trip"""
-        trip = self.db.query(Trip).filter(Trip.id == trip_id).first()
-        if not trip or not trip.published_route_id:
+        """Get checkpoints for a tour"""
+        tour = self.db.query(Tour).filter(Tour.id == tour_id).first()
+        if not tour or not tour.published_route_id:
             return []
 
         # Use locked route if user has active session
-        route_id = trip.published_route_id
+        route_id = tour.published_route_id
         if user_id:
-            active = self.db.query(UserActiveTrip).filter(
-                UserActiveTrip.user_id == user_id,
-                UserActiveTrip.trip_id == trip_id,
-                UserActiveTrip.completed_at == None
+            active = self.db.query(UserActiveTour).filter(
+                UserActiveTour.user_id == user_id,
+                UserActiveTour.tour_id == tour_id,
+                UserActiveTour.completed_at == None
             ).first()
             if active:
                 route_id = active.locked_route_id
@@ -424,11 +424,11 @@ class RouteService:
         self.db.commit()
 
         # Check for auto-completion
-        trip = self.db.query(Trip).join(
-            Route, Trip.id == Route.trip_id
+        tour = self.db.query(Tour).join(
+            Route, Tour.id == Route.tour_id
         ).filter(Route.id == checkpoint.route_id).first()
-        if trip:
-            self._check_automatic_completion(user_id, trip.id)
+        if tour:
+            self._check_automatic_completion(user_id, tour.id)
 
         return self._get_checkpoint_progress(checkpoint, vp, "en")
 
@@ -468,11 +468,11 @@ class RouteService:
         self.db.commit()
 
         # Check for auto-completion
-        trip = self.db.query(Trip).join(
-            Route, Trip.id == Route.trip_id
+        tour = self.db.query(Tour).join(
+            Route, Tour.id == Route.tour_id
         ).filter(Route.id == checkpoint.route_id).first()
-        if trip:
-            self._check_automatic_completion(user_id, trip.id)
+        if tour:
+            self._check_automatic_completion(user_id, tour.id)
 
         return self._get_checkpoint_progress(checkpoint, vp, "en")
 
@@ -498,19 +498,19 @@ class RouteService:
             "audio_completed_at": vp.audio_completed_at if vp else None
         }
 
-    # ========== Active Trips Operations ==========
+    # ========== Active Tours Operations ==========
 
-    def get_user_active_trips(self, user_id: int, lang: str = "en") -> list[dict]:
-        """Get user's active trips"""
-        sessions = self.db.query(UserActiveTrip).filter(
-            UserActiveTrip.user_id == user_id
-        ).order_by(UserActiveTrip.started_at.desc()).all()
+    def get_user_active_tours(self, user_id: int, lang: str = "en") -> list[dict]:
+        """Get user's active tours"""
+        sessions = self.db.query(UserActiveTour).filter(
+            UserActiveTour.user_id == user_id
+        ).order_by(UserActiveTour.started_at.desc()).all()
 
         result = []
         for session in sessions:
-            trip = session.trip
+            tour = session.tour
             route = session.locked_route
-            city = self.db.query(City).filter(City.geonameid == trip.city_id).first()
+            city = self.db.query(City).filter(City.geonameid == tour.city_id).first()
 
             checkpoint_count = self.db.query(func.count(Checkpoint.id)).filter(
                 Checkpoint.route_id == route.id,
@@ -521,10 +521,10 @@ class RouteService:
 
             result.append({
                 "id": session.id,
-                "trip": {
-                    "id": trip.id,
-                    "slug": trip.slug,
-                    "status": trip.status.value,
+                "tour": {
+                    "id": tour.id,
+                    "slug": tour.slug,
+                    "status": tour.status.value,
                     "title": self._resolve_i18n(route.title_i18n, lang),
                     "summary": self._resolve_i18n(route.summary_i18n, lang) if route.summary_i18n else None,
                     "duration_min": route.duration_min,
@@ -535,7 +535,7 @@ class RouteService:
                     "free_checkpoint_limit": route.free_checkpoint_limit,
                     "price_amount": route.price_amount,
                     "price_currency": route.price_currency,
-                    "city_id": trip.city_id,
+                    "city_id": tour.city_id,
                     "city_name": city.name if city else "",
                     "checkpoint_count": checkpoint_count,
                     "user_progress": None
@@ -554,40 +554,40 @@ class RouteService:
 
         return result
 
-    def start_trip(self, user_id: int, trip_id: UUID) -> dict | None:
-        """Start a trip session"""
-        trip = self.db.query(Trip).filter(Trip.id == trip_id).first()
-        if not trip or not trip.published_route_id:
+    def start_tour(self, user_id: int, tour_id: UUID) -> dict | None:
+        """Start a tour session"""
+        tour = self.db.query(Tour).filter(Tour.id == tour_id).first()
+        if not tour or not tour.published_route_id:
             return None
 
         # Check if already started
-        existing = self.db.query(UserActiveTrip).filter(
-            UserActiveTrip.user_id == user_id,
-            UserActiveTrip.trip_id == trip_id
+        existing = self.db.query(UserActiveTour).filter(
+            UserActiveTour.user_id == user_id,
+            UserActiveTour.tour_id == tour_id
         ).first()
 
         if existing:
             # Return existing session
-            return self._get_active_trip_response(existing, "en")
+            return self._get_active_tour_response(existing, "en")
 
         # Create new session
-        session = UserActiveTrip(
+        session = UserActiveTour(
             user_id=user_id,
-            trip_id=trip_id,
-            locked_route_id=trip.published_route_id
+            tour_id=tour_id,
+            locked_route_id=tour.published_route_id
         )
         self.db.add(session)
         self.db.commit()
         self.db.refresh(session)
 
-        return self._get_active_trip_response(session, "en")
+        return self._get_active_tour_response(session, "en")
 
-    def finish_trip(self, user_id: int, trip_id: UUID) -> dict | None:
-        """Manually finish a trip"""
-        session = self.db.query(UserActiveTrip).filter(
-            UserActiveTrip.user_id == user_id,
-            UserActiveTrip.trip_id == trip_id,
-            UserActiveTrip.completed_at == None
+    def finish_tour(self, user_id: int, tour_id: UUID) -> dict | None:
+        """Manually finish a tour"""
+        session = self.db.query(UserActiveTour).filter(
+            UserActiveTour.user_id == user_id,
+            UserActiveTour.tour_id == tour_id,
+            UserActiveTour.completed_at == None
         ).first()
 
         if not session:
@@ -597,13 +597,13 @@ class RouteService:
         session.completion_type = CompletionType.MANUAL
         self.db.commit()
 
-        return self._get_active_trip_response(session, "en")
+        return self._get_active_tour_response(session, "en")
 
-    def _get_active_trip_response(self, session: UserActiveTrip, lang: str) -> dict:
-        """Build active trip response"""
-        trip = session.trip
+    def _get_active_tour_response(self, session: UserActiveTour, lang: str) -> dict:
+        """Build active tour response"""
+        tour = session.tour
         route = session.locked_route
-        city = self.db.query(City).filter(City.geonameid == trip.city_id).first()
+        city = self.db.query(City).filter(City.geonameid == tour.city_id).first()
 
         checkpoint_count = self.db.query(func.count(Checkpoint.id)).filter(
             Checkpoint.route_id == route.id,
@@ -614,10 +614,10 @@ class RouteService:
 
         return {
             "id": session.id,
-            "trip": {
-                "id": trip.id,
-                "slug": trip.slug,
-                "status": trip.status.value,
+            "tour": {
+                "id": tour.id,
+                "slug": tour.slug,
+                "status": tour.status.value,
                 "title": self._resolve_i18n(route.title_i18n, lang),
                 "summary": self._resolve_i18n(route.summary_i18n, lang) if route.summary_i18n else None,
                 "duration_min": route.duration_min,
@@ -628,7 +628,7 @@ class RouteService:
                 "free_checkpoint_limit": route.free_checkpoint_limit,
                 "price_amount": route.price_amount,
                 "price_currency": route.price_currency,
-                "city_id": trip.city_id,
+                "city_id": tour.city_id,
                 "city_name": city.name if city else "",
                 "checkpoint_count": checkpoint_count,
                 "user_progress": None
@@ -647,128 +647,128 @@ class RouteService:
 
     # ========== Admin Operations ==========
 
-    def create_trip(self, user_id: int, city_id: int, slug: str, status: str = "draft") -> Trip:
-        """Create new trip"""
-        trip = Trip(
+    def create_tour(self, user_id: int, city_id: int, slug: str, status: str = "draft") -> Tour:
+        """Create new tour"""
+        tour = Tour(
             created_by_user_id=user_id,
             city_id=city_id,
             slug=slug,
-            status=TripStatus(status)
+            status=TourStatus(status)
         )
-        self.db.add(trip)
+        self.db.add(tour)
         self.db.commit()
-        self.db.refresh(trip)
-        return trip
+        self.db.refresh(tour)
+        return tour
 
-    def update_trip(self, trip_id: UUID, slug: str | None = None, status: str | None = None) -> Trip | None:
-        """Update trip metadata"""
-        trip = self.db.query(Trip).filter(Trip.id == trip_id).first()
-        if not trip:
+    def update_tour(self, tour_id: UUID, slug: str | None = None, status: str | None = None) -> Tour | None:
+        """Update tour metadata"""
+        tour = self.db.query(Tour).filter(Tour.id == tour_id).first()
+        if not tour:
             return None
 
         if slug is not None:
-            trip.slug = slug
+            tour.slug = slug
         if status is not None:
-            trip.status = TripStatus(status)
+            tour.status = TourStatus(status)
 
         self.db.commit()
-        self.db.refresh(trip)
-        return trip
+        self.db.refresh(tour)
+        return tour
 
-    def delete_trip(self, trip_id: UUID) -> bool:
-        """Delete trip (cascades to routes, checkpoints)"""
-        trip = self.db.query(Trip).filter(Trip.id == trip_id).first()
-        if not trip:
+    def delete_tour(self, tour_id: UUID) -> bool:
+        """Delete tour (cascades to routes, checkpoints)"""
+        tour = self.db.query(Tour).filter(Tour.id == tour_id).first()
+        if not tour:
             return False
 
-        self.db.delete(trip)
+        self.db.delete(tour)
         self.db.commit()
         return True
 
-    def get_trip_admin(self, trip_id: UUID) -> dict | None:
-        """Get trip with route count for admin view"""
-        trip = self.db.query(Trip).filter(Trip.id == trip_id).first()
-        if not trip:
+    def get_tour_admin(self, tour_id: UUID) -> dict | None:
+        """Get tour with route count for admin view"""
+        tour = self.db.query(Tour).filter(Tour.id == tour_id).first()
+        if not tour:
             return None
 
         route_count = self.db.query(func.count(Route.id)).filter(
-            Route.trip_id == trip_id
+            Route.tour_id == tour_id
         ).scalar() or 0
 
-        city = self.db.query(City).filter(City.geonameid == trip.city_id).first()
+        city = self.db.query(City).filter(City.geonameid == tour.city_id).first()
 
         return {
-            "id": trip.id,
-            "slug": trip.slug,
-            "status": trip.status.value,
-            "city_id": trip.city_id,
+            "id": tour.id,
+            "slug": tour.slug,
+            "status": tour.status.value,
+            "city_id": tour.city_id,
             "city_name": city.name if city else "",
-            "created_by_user_id": trip.created_by_user_id,
-            "published_route_id": trip.published_route_id,
+            "created_by_user_id": tour.created_by_user_id,
+            "published_route_id": tour.published_route_id,
             "route_count": route_count,
-            "created_at": trip.created_at,
-            "updated_at": trip.updated_at
+            "created_at": tour.created_at,
+            "updated_at": tour.updated_at
         }
 
-    def list_trips_admin(
+    def list_tours_admin(
         self,
         city_id: int | None = None,
         status: list[str] | None = None,
         limit: int = 50,
         offset: int = 0
     ) -> dict:
-        """List trips for admin with all statuses"""
-        query = self.db.query(Trip)
+        """List tours for admin with all statuses"""
+        query = self.db.query(Tour)
 
         if city_id:
-            query = query.filter(Trip.city_id == city_id)
+            query = query.filter(Tour.city_id == city_id)
 
         if status:
-            statuses = [TripStatus(s) for s in status if s in TripStatus.__members__.values()]
+            statuses = [TourStatus(s) for s in status if s in TourStatus.__members__.values()]
             if statuses:
-                query = query.filter(Trip.status.in_(statuses))
+                query = query.filter(Tour.status.in_(statuses))
 
         count = query.count()
-        trips = query.order_by(Trip.created_at.desc()).offset(offset).limit(limit).all()
+        tours = query.order_by(Tour.created_at.desc()).offset(offset).limit(limit).all()
 
         result = []
-        for trip in trips:
+        for tour in tours:
             route_count = self.db.query(func.count(Route.id)).filter(
-                Route.trip_id == trip.id
+                Route.tour_id == tour.id
             ).scalar() or 0
 
-            city = self.db.query(City).filter(City.geonameid == trip.city_id).first()
+            city = self.db.query(City).filter(City.geonameid == tour.city_id).first()
 
             result.append({
-                "id": trip.id,
-                "slug": trip.slug,
-                "status": trip.status.value,
-                "city_id": trip.city_id,
+                "id": tour.id,
+                "slug": tour.slug,
+                "status": tour.status.value,
+                "city_id": tour.city_id,
                 "city_name": city.name if city else "",
-                "created_by_user_id": trip.created_by_user_id,
-                "published_route_id": trip.published_route_id,
+                "created_by_user_id": tour.created_by_user_id,
+                "published_route_id": tour.published_route_id,
                 "route_count": route_count,
-                "created_at": trip.created_at,
-                "updated_at": trip.updated_at
+                "created_at": tour.created_at,
+                "updated_at": tour.updated_at
             })
 
-        return {"count": count, "trips": result}
+        return {"count": count, "tours": result}
 
-    def create_route(self, trip_id: UUID, user_id: int, data: dict) -> Route | None:
+    def create_route(self, tour_id: UUID, user_id: int, data: dict) -> Route | None:
         """Create route from data dict with automatic checkpoint creation"""
-        trip = self.db.query(Trip).filter(Trip.id == trip_id).first()
-        if not trip:
+        tour = self.db.query(Tour).filter(Tour.id == tour_id).first()
+        if not tour:
             return None
 
         # Auto-set version_no to max(existing) + 1
         max_version = self.db.query(func.max(Route.version_no)).filter(
-            Route.trip_id == trip_id
+            Route.tour_id == tour_id
         ).scalar() or 0
         version_no = max_version + 1
 
         # Create route
         route = Route(
-            trip_id=trip_id,
+            tour_id=tour_id,
             version_no=version_no,
             created_by_user_id=user_id,
             status=RouteStatus.DRAFT,
@@ -818,10 +818,10 @@ class RouteService:
         self.db.refresh(route)
         return route
 
-    def get_trip_routes(self, trip_id: UUID) -> list[dict]:
-        """List all routes for a trip"""
+    def get_tour_routes(self, tour_id: UUID) -> list[dict]:
+        """List all routes for a tour"""
         routes = self.db.query(Route).filter(
-            Route.trip_id == trip_id
+            Route.tour_id == tour_id
         ).order_by(Route.version_no.desc()).all()
 
         result = []
@@ -832,7 +832,7 @@ class RouteService:
 
             result.append({
                 "id": route.id,
-                "trip_id": route.trip_id,
+                "tour_id": route.tour_id,
                 "version_no": route.version_no,
                 "status": route.status.value,
                 "created_by_user_id": route.created_by_user_id,
@@ -889,20 +889,20 @@ class RouteService:
         self.db.refresh(route)
         return route
 
-    def publish_route(self, trip_id: UUID, route_id: UUID) -> Trip | None:
-        """Set route status to published and update trip"""
-        trip = self.db.query(Trip).filter(Trip.id == trip_id).first()
-        if not trip:
+    def publish_route(self, tour_id: UUID, route_id: UUID) -> Tour | None:
+        """Set route status to published and update tour"""
+        tour = self.db.query(Tour).filter(Tour.id == tour_id).first()
+        if not tour:
             return None
 
         route = self.db.query(Route).filter(Route.id == route_id).first()
-        if not route or route.trip_id != trip_id:
+        if not route or route.tour_id != tour_id:
             return None
 
         # Set any previously published route to superseded
-        if trip.published_route_id:
+        if tour.published_route_id:
             old_route = self.db.query(Route).filter(
-                Route.id == trip.published_route_id
+                Route.id == tour.published_route_id
             ).first()
             if old_route:
                 old_route.status = RouteStatus.SUPERSEDED
@@ -913,15 +913,15 @@ class RouteService:
         route.published_at = datetime.now(timezone.utc)
         route.updated_at = datetime.now(timezone.utc)
 
-        # Update trip
-        trip.published_route_id = route_id
-        if trip.status != TripStatus.PUBLISHED:
-            trip.status = TripStatus.PUBLISHED
-        trip.updated_at = datetime.now(timezone.utc)
+        # Update tour
+        tour.published_route_id = route_id
+        if tour.status != TourStatus.PUBLISHED:
+            tour.status = TourStatus.PUBLISHED
+        tour.updated_at = datetime.now(timezone.utc)
 
         self.db.commit()
-        self.db.refresh(trip)
-        return trip
+        self.db.refresh(tour)
+        return tour
 
     def update_checkpoint(self, checkpoint_id: UUID, data: dict) -> Checkpoint | None:
         """Update checkpoint metadata"""

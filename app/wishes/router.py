@@ -1,4 +1,4 @@
-"""User-facing endpoints for wishes (trips) and wants (cities)."""
+"""User-facing endpoints for wishes (tours) and wants (cities)."""
 
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
@@ -15,7 +15,7 @@ from app.wishes.schemas import (
 router = APIRouter()
 
 
-# ========== Wished Trips ==========
+# ========== Wished Tours ==========
 
 @router.post(
     "/routes/{route_id}/wish",
@@ -29,10 +29,10 @@ def wish_route(
     lang: str = Query("en", description="Language for i18n content"),
 ):
     """
-    Wish a coming_soon trip to receive notification when published.
+    Wish a coming_soon tour to receive notification when published.
 
-    - Trip must have status 'coming_soon'
-    - Cannot wish a trip you have already completed
+    - Tour must have status 'coming_soon'
+    - Cannot wish a tour you have already completed
     - Idempotent: re-wishing reactivates an inactive wish
     """
     result = wish_service.wish_route(current_user.id, route_id, lang)
@@ -57,7 +57,7 @@ def unwish_route(
     lang: str = Query("en", description="Language for i18n content"),
 ):
     """
-    Unwish a trip (unsubscribe from notifications).
+    Unwish a tour (unsubscribe from notifications).
 
     Soft deletes the wish - can be reactivated by wishing again.
     """
@@ -77,12 +77,12 @@ def get_route_wish_status(
     current_user: CurrentUser,
     lang: str = Query("en", description="Language for i18n content"),
 ):
-    """Get user's wish status for a specific trip."""
+    """Get user's wish status for a specific tour."""
     result = wish_service.get_wished_route(current_user.id, route_id, lang)
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No wish found for this trip"
+            detail="No wish found for this tour"
         )
     return result
 
@@ -100,7 +100,7 @@ def want_city(
     current_user: CurrentUser,
 ):
     """
-    Want a city to receive notification when first trip is added.
+    Want a city to receive notification when first tour is added.
 
     - Can want any city in GeoNames database
     - Idempotent: re-wanting reactivates an inactive want
@@ -165,4 +165,4 @@ def get_my_wishes(
     wanted = wish_service.get_user_wanted_cities(
         current_user.id, active_only=True
     )
-    return {"wished_trips": wished, "wanted_cities": wanted}
+    return {"wished_tours": wished, "wanted_cities": wanted}

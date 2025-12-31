@@ -26,7 +26,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
-class TripStatus(str, enum.Enum):
+class TourStatus(str, enum.Enum):
     DRAFT = "draft"
     PUBLISHED = "published"
     COMING_SOON = "coming_soon"
@@ -51,8 +51,8 @@ class CompletionType(str, enum.Enum):
     AUTOMATIC = "automatic"
 
 
-class Trip(Base):
-    """A trip is the top-level entity for an audio guide experience in a city."""
+class Tour(Base):
+    """A tour is the top-level entity for an audio guide experience in a city."""
     __tablename__ = "routes"
 
     id: Mapped[UUID] = mapped_column(
@@ -64,7 +64,7 @@ class Trip(Base):
     slug: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(
         Enum(
-            TripStatus,
+            TourStatus,
             name="route_status",
             create_type=False,
             values_callable=lambda enum: [e.value for e in enum]
@@ -95,16 +95,16 @@ class Trip(Base):
     city: Mapped["City"] = relationship()  # type: ignore
     created_by: Mapped["AppUser"] = relationship()  # type: ignore
     routes: Mapped[list["Route"]] = relationship(
-        back_populates="trip",
+        back_populates="tour",
         cascade="all, delete-orphan",
-        foreign_keys="[Route.trip_id]",
+        foreign_keys="[Route.tour_id]",
     )
     published_route: Mapped["Route | None"] = relationship(
         foreign_keys=[published_route_id],
         post_update=True,
     )
-    active_sessions: Mapped[list["UserActiveTrip"]] = relationship(
-        back_populates="trip",
+    active_sessions: Mapped[list["UserActiveTour"]] = relationship(
+        back_populates="tour",
         cascade="all, delete-orphan",
     )
 
@@ -117,13 +117,13 @@ class Trip(Base):
 
 
 class Route(Base):
-    """A route is a specific version of a trip with fixed content and checkpoints."""
+    """A route is a specific version of a tour with fixed content and checkpoints."""
     __tablename__ = "route_versions"
 
     id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
     )
-    trip_id: Mapped[UUID] = mapped_column(
+    tour_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("routes.id", ondelete="CASCADE"),
         nullable=False,
@@ -162,9 +162,9 @@ class Route(Base):
     )
 
     # Relationships
-    trip: Mapped["Trip"] = relationship(
+    tour: Mapped["Tour"] = relationship(
         back_populates="routes",
-        foreign_keys=[trip_id],
+        foreign_keys=[tour_id],
     )
     created_by: Mapped["AppUser"] = relationship()  # type: ignore
     checkpoints: Mapped[list["Checkpoint"]] = relationship(
@@ -174,8 +174,8 @@ class Route(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("route_id", "version_no", name="uq_route_version"),
-        Index("idx_route_versions_route", "route_id"),
+        UniqueConstraint("tour_id", "version_no", name="uq_route_version"),
+        Index("idx_route_versions_route", "tour_id"),
         Index("idx_route_versions_status", "status"),
         CheckConstraint(
             "free_checkpoint_limit >= 0", name="check_free_checkpoint_limit_nonneg"
@@ -235,9 +235,9 @@ class Checkpoint(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "route_version_id", "seq_no", name="uq_checkpoint_route_version_seq"
+            "route_id", "seq_no", name="uq_checkpoint_route_version_seq"
         ),
-        Index("idx_checkpoints_route_version", "route_version_id"),
+        Index("idx_checkpoints_route_version", "route_id"),
         CheckConstraint("seq_no >= 0", name="check_seq_no_nonneg"),
         CheckConstraint("trigger_radius_m > 0", name="check_trigger_radius_positive"),
     )
@@ -294,8 +294,8 @@ class VisitedPoint(Base):
     )
 
 
-class UserActiveTrip(Base):
-    """Tracks a user's active trip session with a locked route version."""
+class UserActiveTour(Base):
+    """Tracks a user's active tour session with a locked route version."""
     __tablename__ = "user_active_routes"
 
     id: Mapped[UUID] = mapped_column(
@@ -306,7 +306,7 @@ class UserActiveTrip(Base):
         ForeignKey("app_user.id", ondelete="CASCADE"),
         nullable=False,
     )
-    trip_id: Mapped[UUID] = mapped_column(
+    tour_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("routes.id", ondelete="CASCADE"),
         nullable=False,
@@ -331,11 +331,11 @@ class UserActiveTrip(Base):
 
     # Relationships
     user: Mapped["AppUser"] = relationship()  # type: ignore
-    trip: Mapped["Trip"] = relationship(back_populates="active_sessions")
+    tour: Mapped["Tour"] = relationship(back_populates="active_sessions")
     locked_route: Mapped["Route"] = relationship()
 
     __table_args__ = (
-        UniqueConstraint("user_id", "route_id", name="uq_user_active_route"),
+        UniqueConstraint("user_id", "tour_id", name="uq_user_active_route"),
         Index("idx_user_active_routes_user", "user_id"),
-        Index("idx_user_active_routes_route", "route_id"),
+        Index("idx_user_active_routes_route", "tour_id"),
     )

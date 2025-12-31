@@ -7,7 +7,7 @@
 | Role | Description |
 |------|-------------|
 | **User** | End user of mobile app |
-| **Editor** | Content creator, trip editor |
+| **Editor** | Content creator, tour editor |
 | **Admin** | Administrator, product/marketing manager |
 | **System** | Background processes, automation | *(stories deferred to tech spec)*
 
@@ -21,24 +21,24 @@
 
 | ID | Role | Story | Confidence | Comment |
 |---|---|---|---|---|
-| **US-001** | User | I want to **see a list of available cities with trip counts** so that **I can choose a city of interest to explore** | 🟢 95% | — |
-| **US-002** | User | I want **the app to automatically detect my location and show nearby trips** so that **I can quickly find relevant options** | 🟡 85% | Original specifies "in a specific city" |
-| **US-003** | User | I want to **see trip cards with title, duration, elevation gain, language, status, and price** so that **I can choose a suitable trip** | 🟢 95% | — |
-| **US-004** | User | I want to **see trip points on the map and listen to available audio before purchase** so that **I can make a purchase decision** | 🟡 80% | See AC below |
-| **US-012b** | User | I want to **filter trips (Near Me, Purchased, Wished, Wanted, Downloaded)** so that **I can quickly find what I need** | 🟡 75% | Original has **two US-012b** — this is the first. Numbering bug in source |
+| **US-001** | User | I want to **see a list of available cities with tour counts** so that **I can choose a city of interest to explore** | 🟢 95% | — |
+| **US-002** | User | I want **the app to automatically detect my location and show nearby tours** so that **I can quickly find relevant options** | 🟡 85% | Original specifies "in a specific city" |
+| **US-003** | User | I want to **see tour cards with title, duration, elevation gain, language, status, and price** so that **I can choose a suitable tour** | 🟢 95% | — |
+| **US-004** | User | I want to **see tour points on the map and listen to available audio before purchase** so that **I can make a purchase decision** | 🟡 80% | See AC below |
+| **US-012b** | User | I want to **filter tours (Near Me, Purchased, Wished, Wanted, Downloaded)** so that **I can quickly find what I need** | 🟡 75% | Original has **two US-012b** — this is the first. Numbering bug in source |
 
 #### AC for US-004 / Audio API (Audio Access):
-1. Paid trip (price>0) NOT purchased → first 4 audio files available (trial)
-2. Paid trip purchased → all audio files available
-3. Free trip (price=0) → all audio files available to all users
+1. Paid tour (price>0) NOT purchased → first 4 audio files available (trial)
+2. Paid tour purchased → all audio files available
+3. Free tour (price=0) → all audio files available to all users
 4. Verification at API level by authorized JWT
-5. Editor has access to all audio files of their trips without purchase
+5. Editor has access to all audio files of their tours without purchase
 
 #### AC for price management (US-004, US-013a):
-1. **Admin** can change the price of any trip
-2. **Editor** can change the price only of their own trips
+1. **Admin** can change the price of any tour
+2. **Editor** can change the price only of their own tours
 3. Minimum price: no restrictions (from $0.01)
-4. price=0 — free trip (no trial)
+4. price=0 — free tour (no trial)
 
 ---
 
@@ -76,22 +76,22 @@
 |---|---|---|---|---|
 | **US-021** | User | I want to **walk the route I started with until completion** so that **my progress doesn't break due to updates** | 🟢 90% | — |
 | **US-033** | Editor | I want to **work with draft version (JSON in routes.draft_geojson) before publishing** so that **I can freely edit without affecting users** | 🟡 85% | Missing AC: GET/PATCH endpoints, copying on publish |
-| **US-037** | Editor | I want to **fix typos in published trips without versioning (in-place), but receive warning on structural changes** so that **I understand the impact on users** | 🟢 90% | — |
-| **US-052** | Editor | I want to **view all past published routes of a trip** so that **I understand the change history** | 🟢 90% | Rollback forbidden — there may be active users on old route snapshots |
+| **US-037** | Editor | I want to **fix typos in published tours without versioning (in-place), but receive warning on structural changes** so that **I understand the impact on users** | 🟢 90% | — |
+| **US-052** | Editor | I want to **view all past published routes of a tour** so that **I understand the change history** | 🟢 90% | Rollback forbidden — there may be active users on old route snapshots |
 
 #### AC for US-037 (Versioning on Edit):
 1. Text/description fix = no new version (in-place)
 2. Adding/removing points = creates new version on PUBLISH
-3. Changing trip_index/display_number = no new version
+3. Changing tour_index/display_number = no new version
 4. Point IDs are immutable (never change)
-5. Warning when attempting to change structure of published trip
-6. **In-place edits apply to ALL routes** of the trip (including old snapshots that users are tied to)
+5. Warning when attempting to change structure of published tour
+6. **In-place edits apply to ALL routes** of the tour (including old snapshots that users are tied to)
 
 #### AC for US-033/US-034 (Draft and Editor Access):
 1. **Draft** — editor's working version, not visible to users
 2. **Published** — created from draft on publish
 3. Editor can **reset draft** to last published route
-4. In mobile app, editor **always sees draft version** of their trips
+4. In mobile app, editor **always sees draft version** of their tours
 5. **Editor's progress resets** when new route is published
 
 ---
@@ -105,7 +105,7 @@
 | **US-041** | Editor | I want to **specify planned languages and mark ready ones (languages: {lang: bool})** so that **I can control visibility** | 🟢 90% | — |
 
 #### AC for US-039/US-041 (Multilingual Content):
-1. Editor adds planned languages to draft version of trip
+1. Editor adds planned languages to draft version of tour
 2. **Language readiness is marked in draft:** `languages: {ru: true, en: false}`
 3. On publish, Editor specifies which languages are available to users
 4. **Publishing <100% is possible with warning** (soft requirement, not blocking)
@@ -119,22 +119,22 @@
 | ID | Role | Story | Confidence | Comment |
 |---|---|---|---|---|
 | **US-019** | Editor | I want to **use a drag-and-drop constructor on the map with preview** so that **I can easily create and save quality content and stories to server** | 🟢 90% | — |
-| **US-020** | Editor | I want to **test the trip in simulation mode before publishing** so that **I can verify transition and navigation logic** | 🟢 95% | — |
-| **US-031** | Admin | I want to **manage editor permissions (list, assign/revoke by email, navigate to trips)** so that **I can control access** | 🟡 85% | Missing AC: endpoints, editor sees only their trips |
-| **US-034** | Editor | I want to **have automatic free access to my trips** so that **I can test in the app without purchasing** | 🟢 95% | — |
-| **US-040** | Editor | I want to **upload and replace audio files (single/batch) with auto-matching by pattern poi_{seq_no}.mp3** so that **I can efficiently populate trips** | 🟢 90% | — |
+| **US-020** | Editor | I want to **test the tour in simulation mode before publishing** so that **I can verify transition and navigation logic** | 🟢 95% | — |
+| **US-031** | Admin | I want to **manage editor permissions (list, assign/revoke by email, navigate to tours)** so that **I can control access** | 🟡 85% | Missing AC: endpoints, editor sees only their tours |
+| **US-034** | Editor | I want to **have automatic free access to my tours** so that **I can test in the app without purchasing** | 🟢 95% | — |
+| **US-040** | Editor | I want to **upload and replace audio files (single/batch) with auto-matching by pattern poi_{seq_no}.mp3** so that **I can efficiently populate tours** | 🟢 90% | — |
 
 #### AC for US-031 (Editor Permission Management):
 1. **Admin creation:** manually in database (SQL), no UI
 2. **On revoking editor rights:**
-   - **Published trips** remain live, available to users
-   - Editor loses access to edit their trips
-   - **Draft trips** are preserved in database (not deleted)
-   - Admin can assign another editor to these trips
+   - **Published tours** remain live, available to users
+   - Editor loses access to edit their tours
+   - **Draft tours** are preserved in database (not deleted)
+   - Admin can assign another editor to these tours
 3. **On restoring rights:**
-   - Trips are **NOT automatically re-assigned** to editor
-   - Admin must **manually reassign** trips to editor
-4. Editor sees only their trips in admin panel
+   - Tours are **NOT automatically re-assigned** to editor
+   - Admin must **manually reassign** tours to editor
+4. Editor sees only their tours in admin panel
 
 ---
 
@@ -142,18 +142,18 @@
 
 | ID | Role | Story | Confidence | Comment |
 |---|---|---|---|---|
-| **US-013a** | User | I want to **listen to the first 4 points free on each paid trip** so that **I can try the service without commitment** | 🟢 95% | See AC below |
-| **US-013b** | User | I want to **purchase individual trips with desired language ($3-$8) via in-app purchase** so that **I only pay for what I need** | 🟢 90% | — |
+| **US-013a** | User | I want to **listen to the first 4 points free on each paid tour** so that **I can try the service without commitment** | 🟢 95% | See AC below |
+| **US-013b** | User | I want to **purchase individual tours with desired language ($3-$8) via in-app purchase** so that **I only pay for what I need** | 🟢 90% | — |
 | **US-015** | User | I want **fast seamless email authorization on launch** so that **I don't lose purchases when switching phones** | 🟢 90% | — |
-| **US-042** | User | I want to **purchase bundles (trip collections) with a discount** so that **I save when buying multiple trips** | 🟢 90% | After bundle purchase — card disappears, individual trips appear |
-| **US-043** | Admin | I want to **create and manage bundles (select trips, set price and discount)** so that **I can offer advantageous collections to users** | 🟢 90% | Trips from bundle can be purchased separately too |
+| **US-042** | User | I want to **purchase bundles (tour collections) with a discount** so that **I save when buying multiple tours** | 🟢 90% | After bundle purchase — card disappears, individual tours appear |
+| **US-043** | Admin | I want to **create and manage bundles (select tours, set price and discount)** so that **I can offer advantageous collections to users** | 🟢 90% | Tours from bundle can be purchased separately too |
 
 #### AC for US-013a (Trial — definition of "point"):
-1. **"Point" = POI entity** by `trip_index`, regardless of audio presence
-2. **Trial = first 4 POI** sorted by `trip_index`
-3. If trip has <4 POI → all are available in trial
+1. **"Point" = POI entity** by `tour_index`, regardless of audio presence
+2. **Trial = first 4 POI** sorted by `tour_index`
+3. If tour has <4 POI → all are available in trial
 4. POI without audio in user's language → show text description
-5. Global configuration: 4 points for all paid trips
+5. Global configuration: 4 points for all paid tours
 
 #### AC for US-015 (Magic Link Authorization):
 1. **Link expiry:** 15 minutes
@@ -166,11 +166,11 @@
    - `LINK_EXPIRED`: "Link expired" + resend button
 
 #### AC for US-042/US-043 (Bundles):
-1. **After bundle purchase** all trips from bundle are available to user **forever** — as if purchased separately
-2. For trips from purchased bundle, **"Start"** button is displayed instead of "Buy"
-3. Trips from bundle can be purchased separately (before bundle purchase)
-4. **RESOLVED: Partial ownership** — hide bundle if user owns any trip from it
-5. User can purchase remaining trips only separately
+1. **After bundle purchase** all tours from bundle are available to user **forever** — as if purchased separately
+2. For tours from purchased bundle, **"Start"** button is displayed instead of "Buy"
+3. Tours from bundle can be purchased separately (before bundle purchase)
+4. **RESOLVED: Partial ownership** — hide bundle if user owns any tour from it
+5. User can purchase remaining tours only separately
 
 ---
 
@@ -178,19 +178,19 @@
 
 | ID | Role | Story | Confidence | Comment |
 |---|---|---|---|---|
-| **US-025** | User | I want to **get "First Steps" achievement for completing my first trip by GPS** so that **I feel the journey beginning** | 🟢 90% | — |
-| **US-026** | User | I want to **get achievements for trips >90%: "Curious"(5), "Explorer"(15), "Traveler"(30), "Nomad"(50), "Road Legend"(100)** so that **I have motivation** | 🟢 90% | — |
+| **US-025** | User | I want to **get "First Steps" achievement for completing my first tour by GPS** so that **I feel the journey beginning** | 🟢 90% | — |
+| **US-026** | User | I want to **get achievements for tours >90%: "Curious"(5), "Explorer"(15), "Traveler"(30), "Nomad"(50), "Road Legend"(100)** so that **I have motivation** | 🟢 90% | — |
 | **US-027** | User | I want to **get achievements for cities: "Tourist"(3), "Cosmopolitan"(10), "World Citizen"(25), "City Collector"(50)** so that **I can collect** | 🟢 90% | — |
-| **US-028** | User | I want to **get "Fully Explored" achievement for 100% trip completion** so that **I strive for complete exploration** | 🟢 90% | — |
+| **US-028** | User | I want to **get "Fully Explored" achievement for 100% tour completion** so that **I strive for complete exploration** | 🟢 90% | — |
 
 #### AC for US-025..028 (Achievements):
 1. **Immutable:** achievements are never revoked (once earned = forever)
-2. **Once per trip:** one trip = one completion (repeat playthrough doesn't increase counter)
-3. **Snapshot:** on completion, `city_at_completion` is saved (if trip is moved to another city)
-4. **Grandfathered trips count:** trips with grandfathered access count toward achievements
+2. **Once per tour:** one tour = one completion (repeat playthrough doesn't increase counter)
+3. **Snapshot:** on completion, `city_at_completion` is saved (if tour is moved to another city)
+4. **Grandfathered tours count:** tours with grandfathered access count toward achievements
 5. **Trial completions:** completing only trial (4 points) does NOT count toward achievements
 6. **Offline resilience:** completion is saved locally, sync on connection
-7. **Deleted trips:** if trip is deleted after completion — achievement is preserved
+7. **Deleted tours:** if tour is deleted after completion — achievement is preserved
 
 ---
 
@@ -199,7 +199,7 @@
 | ID | Role | Story | Confidence | Comment |
 |---|---|---|---|---|
 | **US-017** | Admin | I want to **see detailed analytics (time in points, transitions, exits, clicks) via Firebase** so that **I can improve the product** | 🟢 90% | LA-story (analytics) |
-| **US-030** | User | I want to **receive push/email when a trip from wishlist appears** so that **I learn about new content** | 🟢 90% | — |
+| **US-030** | User | I want to **receive push/email when a tour from wishlist appears** so that **I learn about new content** | 🟢 90% | — |
 
 ---
 

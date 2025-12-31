@@ -5,11 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.achievements.models import Achievement, UserAchievement
 from app.achievements.schemas import AchievementResponse
-from app.routes.models import UserActiveRoute, Route
+from app.routes.models import UserActiveTour, Tour
 
 
 # Achievement thresholds (from User Stories)
-TRIP_THRESHOLDS = [
+TOUR_THRESHOLDS = [
     ("first_steps", 1),      # US-025
     ("curious", 5),           # US-026
     ("explorer", 15),         # US-026
@@ -54,30 +54,30 @@ async def get_user_achievement_codes(db: AsyncSession, user_id: int) -> set[str]
     return set(result.scalars().all())
 
 
-async def count_completed_trips(db: AsyncSession, user_id: int, min_progress: int = 90) -> int:
-    """Count trips completed by user with at least min_progress%.
+async def count_completed_tours(db: AsyncSession, user_id: int, min_progress: int = 90) -> int:
+    """Count tours completed by user with at least min_progress%.
 
-    A trip is considered completed if user has finished it
+    A tour is considered completed if user has finished it
     (completed_at is not null in user_active_routes).
     """
     result = await db.execute(
-        select(func.count(UserActiveRoute.id))
+        select(func.count(UserActiveTour.id))
         .where(
-            UserActiveRoute.user_id == user_id,
-            UserActiveRoute.completed_at.is_not(None),
+            UserActiveTour.user_id == user_id,
+            UserActiveTour.completed_at.is_not(None),
         )
     )
     return result.scalar() or 0
 
 
 async def count_unique_cities(db: AsyncSession, user_id: int) -> int:
-    """Count unique cities where user has completed at least one trip."""
+    """Count unique cities where user has completed at least one tour."""
     result = await db.execute(
-        select(func.count(distinct(Route.city_id)))
-        .join(UserActiveRoute, Route.id == UserActiveRoute.route_id)
+        select(func.count(distinct(Tour.city_id)))
+        .join(UserActiveTour, Tour.id == UserActiveTour.tour_id)
         .where(
-            UserActiveRoute.user_id == user_id,
-            UserActiveRoute.completed_at.is_not(None),
+            UserActiveTour.user_id == user_id,
+            UserActiveTour.completed_at.is_not(None),
         )
     )
     return result.scalar() or 0
@@ -128,7 +128,7 @@ async def check_and_award_achievements(
     Returns list of newly awarded achievements.
     """
     # Get current stats
-    trips_count = await count_completed_trips(db, user_id)
+    tours_count = await count_completed_tours(db, user_id)
     cities_count = await count_unique_cities(db, user_id)
 
     # Get already earned achievements
@@ -136,9 +136,9 @@ async def check_and_award_achievements(
 
     new_achievements = []
 
-    # Check trip achievements
-    for code, threshold in TRIP_THRESHOLDS:
-        if code not in earned_codes and trips_count >= threshold:
+    # Check tour achievements
+    for code, threshold in TOUR_THRESHOLDS:
+        if code not in earned_codes and tours_count >= threshold:
             ua = await award_achievement(db, user_id, code)
             if ua:
                 await db.refresh(ua, ["achievement"])
@@ -159,20 +159,20 @@ async def get_achievement_progress(
     db: AsyncSession, user_id: int, lang: str = "en"
 ) -> dict:
     """Get user's progress toward achievements."""
-    trips_count = await count_completed_trips(db, user_id)
+    tours_count = await count_completed_tours(db, user_id)
     cities_count = await count_unique_cities(db, user_id)
     earned_codes = await get_user_achievement_codes(db, user_id)
 
-    # Find next trip achievement
-    next_trip = None
-    trips_to_next = None
-    for code, threshold in TRIP_THRESHOLDS:
+    # Find next tour achievement
+    next_tour = None
+    tours_to_next = None
+    for code, threshold in TOUR_THRESHOLDS:
         if code not in earned_codes:
             result = await db.execute(
                 select(Achievement).where(Achievement.code == code)
             )
-            next_trip = result.scalar_one_or_none()
-            trips_to_next = threshold - trips_count
+            next_tour = result.scalar_one_or_none()
+            tours_to_next = threshold - tours_count
             break
 
     # Find next city achievement
@@ -188,10 +188,10 @@ async def get_achievement_progress(
             break
 
     return {
-        "trips_completed": trips_count,
+        "tours_completed": tours_count,
         "cities_visited": cities_count,
-        "next_trip_achievement": next_trip,
+        "next_tour_achievement": next_tour,
         "next_city_achievement": next_city,
-        "trips_to_next": trips_to_next,
+        "tours_to_next": tours_to_next,
         "cities_to_next": cities_to_next,
     }

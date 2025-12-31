@@ -22,11 +22,11 @@ from app.database import Base
 
 
 class UserPurchase(Base):
-    """User's purchase of a trip.
+    """User's purchase of a tour.
 
     Tracks in-app purchases from Apple/Google stores.
     Used for:
-    - Granting full access to trip content
+    - Granting full access to tour content
     - Receipt validation
     - Purchase history
     """

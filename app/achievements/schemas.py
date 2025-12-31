@@ -52,9 +52,9 @@ class CheckAchievementsResponse(BaseModel):
 class AchievementProgressResponse(BaseModel):
     """Progress toward achievements."""
 
-    trips_completed: int = Field(..., description="Trips completed with >90% progress")
-    cities_visited: int = Field(..., description="Unique cities with completed trips")
-    next_trip_achievement: AchievementResponse | None = None
+    tours_completed: int = Field(..., description="Tours completed with >90% progress")
+    cities_visited: int = Field(..., description="Unique cities with completed tours")
+    next_tour_achievement: AchievementResponse | None = None
     next_city_achievement: AchievementResponse | None = None
-    trips_to_next: int | None = Field(None, description="Trips needed for next achievement")
+    tours_to_next: int | None = Field(None, description="Tours needed for next achievement")
     cities_to_next: int | None = Field(None, description="Cities needed for next achievement")

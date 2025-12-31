@@ -2,11 +2,11 @@ from app.routes.models import (
     AudioListenStatus,
     Checkpoint,
     CompletionType,
-    Trip,
-    TripStatus,
+    Tour,
+    TourStatus,
     Route,
     RouteStatus,
-    UserActiveTrip,
+    UserActiveTour,
     VisitedPoint,
 )
 
@@ -14,10 +14,10 @@ __all__ = [
     "AudioListenStatus",
     "Checkpoint",
     "CompletionType",
-    "Trip",
-    "TripStatus",
+    "Tour",
+    "TourStatus",
     "Route",
     "RouteStatus",
-    "UserActiveTrip",
+    "UserActiveTour",
     "VisitedPoint",
 ]

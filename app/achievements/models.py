@@ -24,7 +24,7 @@ class Achievement(Base):
 
     Defines gamification achievements that users can earn.
     Categories:
-    - 'routes': Achievements for completing trips (US-025, US-026)
+    - 'routes': Achievements for completing tours (US-025, US-026)
     - 'cities': Achievements for visiting cities (US-027)
     - 'completion': Achievements for 100% completion (US-028)
     """

@@ -53,6 +53,10 @@ class AppUser(Base):
         nullable=False,
         server_default="user"
     )
+    # US-011i: Selected character for map avatar
+    selected_character: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="cat"
+    )
 
     # Relationships
     identities: Mapped[list["AuthIdentity"]] = relationship(

@@ -26,16 +26,12 @@ All roles share an **Account** entity as their unified identity.
 
 ---
 
-## Core Domain Entities
+## Entity Schemas
 
-| Entity | Description | Key Attributes |
-|--------|-------------|----------------|
-| **Account** | Unified identity for User, Editor, and Admin roles | guid, email, role, created_at |
-| **City** | Geographic location containing tours. Optional for Tours. System seed data (not user-created) | id, name, country_code, coordinates (lat/lng), is_active |
-| **Tour** | Product unit. Has single active Route + version history for in-progress Runs, plus a non-empty draft Route. Soft delete only (archived, never permanently deleted) | autoincrement id, city_id (optional), active_route_id, draft_route_id, is_archived |
-| **Route** | Belongs to a Tour. GeoJSON embeds coordinates with `waypoint_guid` field linking to reusable Waypoints. `waypoint_guids[]` references Waypoint pool. Holds precomputed distance, altitude, time. Lifecycle: Draft → Published. In-progress Runs continue on their original Route version | autoincrement id, tour_id, waypoint_guids[], geojson, status (draft/published), version, distance, altitude, estimated_time |
-| **Waypoint** | Reusable point of interest. Can be referenced by multiple Routes across Tours. Immutable: `guid`, `is_checkpoint`. Audio served via REST `/uploads/audio/{waypoint_guid}/{lang}.mp3`. Default: `is_checkpoint=true` | guid, coordinates, i18n_description, is_checkpoint (immutable) |
-| **Run** | Progress of an Account on a Route. Unlimited concurrent runs allowed across different tours. States: started → completed \| abandoned (explicit user action only; no auto-timeout). `is_simulation` flag for Editor testing (excluded from analytics). `completed_checkpoints` tracks only checkpoint Waypoints | guid, route_id, account_id, started_at, completed_at, abandoned_at, completed_checkpoints[], is_simulation |
+See domain docs for ERDs, API routes, and patterns:
+- `docs/domains/auth.md` — Account, AuthIdentity, RefreshToken
+- `docs/domains/geo.md` — Country, City
+- `docs/domains/tours.md` — Tour, Route, Waypoint, Run
 
 ---
 

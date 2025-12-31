@@ -1,5 +1,10 @@
 # User Stories — Locus Guide (Backend)
 
+> **Prerequisites:** Read domain schemas before reviewing stories:
+> - `domains/auth.md` — Account, AuthIdentity
+> - `domains/geo.md` — Country, City
+> - `domains/tours.md` — Tour, Route, Waypoint, Run
+
 > Frontend-only stories (`-FE` suffix) have been moved to `user-stories-frontend.md`
 
 ## Roles

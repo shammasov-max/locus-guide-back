@@ -93,6 +93,45 @@ Audio-guided tours with versioned routes, reusable waypoints, and progress track
 │ created_at        │ Timestamptz! DEFAULT=now()   │
 │ UNIQUE(account_id, city_id)                      │
 └──────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────┐
+│                      Bundle                      │
+│──────────────────────────────────────────────────│
+│ id                │ Int PK                       │
+│ title_i18n        │ HSTORE! {lang:text}          │
+│ description_i18n  │ HSTORE                       │
+│ price_usd         │ Decimal(10,2)!               │
+│ is_deleted        │ Bool! DEFAULT=false          │
+│ created_at        │ Timestamptz! DEFAULT=now()   │
+└──────────────────────────────────────────────────┘
+* Immutable after creation (delete and recreate)
+* Same tour can be in multiple bundles
+* HIDDEN from user if they own ANY tour in bundle
+
+┌──────────────────────────────────────────────────┐
+│                  BundleToTour                    │
+│──────────────────────────────────────────────────│
+│ bundle_id*        │ Int! FK→Bundle               │
+│ tour_id*          │ Int! FK→Tour                 │
+│ display_order     │ Int! DEFAULT=0               │
+│ PRIMARY KEY(bundle_id, tour_id)                  │
+└──────────────────────────────────────────────────┘
+* Min 2 tours per bundle (enforced at app level)
+
+┌──────────────────────────────────────────────────┐
+│                    Entitlement                   │
+│──────────────────────────────────────────────────│
+│ id                │ BigInt PK                    │
+│ account_id*       │ BigInt! FK→Account           │
+│ tour_id*          │ Int! FK→Tour                 │
+│ bundle_id         │ Int? FK→Bundle               │
+│ source            │ Text! CHECK(direct|bundle|promo|editor_access) │
+│ receipt_id        │ Text?                        │
+│ created_at        │ Timestamptz! DEFAULT=now()   │
+│ UNIQUE(account_id, tour_id)                      │
+└──────────────────────────────────────────────────┘
+* Duplicate purchase returns existing entitlement
+* Editor auto-granted editor_access to own tours
 ```
 
 ---
@@ -112,6 +151,8 @@ Audio-guided tours with versioned routes, reusable waypoints, and progress track
 | GET | `/tours/{id}/preview` | - | First 4 waypoints (free) |
 | GET | `/cities` | - | Cities with tour counts |
 | GET | `/cities/{id}/tours` | - | Tours in city |
+| GET | `/bundles` | - | Active bundles (hidden if user owns ANY contained tour) |
+| GET | `/bundles/{id}` | - | Bundle details |
 
 ### Runs (User)
 
@@ -134,6 +175,7 @@ Audio-guided tours with versioned routes, reusable waypoints, and progress track
 | GET | `/me/watch-list` | Bearer | Get watched cities |
 | PUT | `/me/watch-list/{city_id}` | Bearer | Add city to watch list (idempotent) |
 | DELETE | `/me/watch-list/{city_id}` | Bearer | Remove from watch list |
+| GET | `/me/entitlements` | Bearer | My purchased tours |
 
 ### Editor
 
@@ -162,6 +204,10 @@ Audio-guided tours with versioned routes, reusable waypoints, and progress track
 | GET | `/admin/editors` | Bearer+Admin | List editors |
 | PUT | `/admin/editors/{account_id}` | Bearer+Admin | Grant editor role (idempotent) |
 | DELETE | `/admin/editors/{account_id}` | Bearer+Admin | Revoke editor role |
+| GET | `/admin/bundles` | Bearer+Admin | List all bundles |
+| POST | `/admin/bundles` | Bearer+Admin | Create bundle |
+| GET | `/admin/bundles/{id}` | Bearer+Admin | Get bundle details |
+| DELETE | `/admin/bundles/{id}` | Bearer+Admin | Delete bundle (soft delete) |
 
 **Errors:** 400 (invalid), 401 (auth), 403 (role), 404 (not found), 409 (conflict), 422 (validation)
 
@@ -215,6 +261,20 @@ Audio-guided tours with versioned routes, reusable waypoints, and progress track
 - Users watch Cities for new tour notifications
 - Notification sent when any tour in watched city gets first publish
 
+### Bundles
+- **Minimum 2 tours** required in bundle
+- **Immutable**: No updates — delete and recreate if changes needed
+- **Soft delete**: `is_deleted=true` hides from listings
+- **Hidden visibility**: Bundle not shown to user if they own ANY tour in bundle
+- Same tour can be in multiple bundles
+- Price set by Admin; system calculates discount % from sum of tour prices
+
+### Entitlements
+- **Source types**: `direct` (single purchase), `bundle`, `promo`, `editor_access`
+- **Idempotent**: Duplicate purchase returns existing entitlement
+- **Editor access**: Auto-granted to tour creator
+- **Uniqueness**: One entitlement per (account_id, tour_id) regardless of source
+
 ---
 
 ## Stories
@@ -228,4 +288,6 @@ Audio-guided tours with versioned routes, reusable waypoints, and progress track
 | US-033 | Editor: work with draft before publish |
 | US-036 | Progress syncs across devices |
 | US-036b | Explicit abandon action |
+| US-042 | Purchase bundles with discount |
+| US-043 | Admin creates/manages bundles |
 | US-053 | Mark waypoints as checkpoints |

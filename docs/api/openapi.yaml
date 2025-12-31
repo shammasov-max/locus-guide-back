@@ -34,8 +34,12 @@ tags:
     description: Cities with tour counts
   - name: tours
     description: Public tour listings and details
+  - name: bundles
+    description: Tour bundles with discount
   - name: runs
     description: User tour runs and progress tracking
+  - name: entitlements
+    description: User tour purchases and access
   - name: editor
     description: Editor content management (requires editor role)
   - name: admin
@@ -531,6 +535,66 @@ paths:
           $ref: '#/components/responses/NotFound'
 
   # ============================================================================
+  # BUNDLES DOMAIN (PUBLIC)
+  # ============================================================================
+
+  /bundles:
+    get:
+      tags: [bundles]
+      summary: List active bundles
+      operationId: listBundles
+      description: |
+        Returns active bundles (is_deleted=false). If authenticated,
+        hides bundles where user owns ANY contained tour.
+      parameters:
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: en
+      security:
+        - {}
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Bundles list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bundles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BundleSummary'
+
+  /bundles/{bundle_id}:
+    get:
+      tags: [bundles]
+      summary: Get bundle details
+      operationId: getBundle
+      parameters:
+        - name: bundle_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: en
+      responses:
+        '200':
+          description: Bundle details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BundleDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
   # RUNS DOMAIN (USER)
   # ============================================================================
 
@@ -868,6 +932,32 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # ENTITLEMENTS DOMAIN (USER)
+  # ============================================================================
+
+  /me/entitlements:
+    get:
+      tags: [entitlements]
+      summary: Get my purchased tours
+      operationId: getMyEntitlements
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: My entitlements
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entitlements:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EntitlementResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   # ============================================================================
   # EDITOR DOMAIN
@@ -1433,6 +1523,112 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /admin/bundles:
+    get:
+      tags: [admin]
+      summary: List all bundles
+      operationId: listAdminBundles
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: is_deleted
+          in: query
+          schema:
+            type: boolean
+          description: Filter by deleted status (default false)
+      responses:
+        '200':
+          description: Bundles list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bundles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminBundleDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [admin]
+      summary: Create bundle (draft)
+      operationId: createBundle
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBundleRequest'
+      responses:
+        '201':
+          description: Bundle created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminBundleDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /admin/bundles/{bundle_id}:
+    get:
+      tags: [admin]
+      summary: Get bundle details (admin view)
+      operationId: getAdminBundle
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bundle_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Bundle details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminBundleDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [admin]
+      summary: Delete bundle (soft delete)
+      operationId: deleteBundle
+      description: Sets is_deleted=true (soft delete)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bundle_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Bundle deleted (archived)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
 # ==============================================================================
 # COMPONENTS
 # ==============================================================================
@@ -1522,6 +1718,10 @@ components:
         audio_lang:
           type: string
           nullable: true
+        character:
+          type: object
+          nullable: true
+          description: Flexible user character/avatar settings (any structure)
         units:
           type: string
           enum: [metric, imperial]
@@ -1545,6 +1745,9 @@ components:
           type: string
         audio_lang:
           type: string
+        character:
+          type: object
+          description: Flexible user character/avatar settings (any structure)
         units:
           type: string
           enum: [metric, imperial]
@@ -1694,6 +1897,105 @@ components:
           nullable: true
         is_checkpoint:
           type: boolean
+
+    # --------------------------------------------------------------------------
+    # Bundle Schemas
+    # --------------------------------------------------------------------------
+
+    BundleSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        price_usd:
+          type: number
+        original_price_usd:
+          type: number
+          description: Sum of individual tour prices
+        discount_percent:
+          type: number
+        tour_count:
+          type: integer
+
+    BundleDetail:
+      allOf:
+        - $ref: '#/components/schemas/BundleSummary'
+        - type: object
+          properties:
+            description:
+              type: string
+              nullable: true
+            tours:
+              type: array
+              items:
+                $ref: '#/components/schemas/TourSummary'
+
+    AdminBundleDetail:
+      allOf:
+        - $ref: '#/components/schemas/BundleDetail'
+        - type: object
+          properties:
+            is_deleted:
+              type: boolean
+            title_i18n:
+              type: object
+              additionalProperties:
+                type: string
+            description_i18n:
+              type: object
+              additionalProperties:
+                type: string
+            created_at:
+              type: string
+              format: date-time
+
+    CreateBundleRequest:
+      type: object
+      required: [title_i18n, price_usd, tour_ids]
+      properties:
+        title_i18n:
+          type: object
+          additionalProperties:
+            type: string
+        description_i18n:
+          type: object
+          additionalProperties:
+            type: string
+        price_usd:
+          type: number
+          minimum: 0
+        tour_ids:
+          type: array
+          items:
+            type: integer
+          minItems: 2
+          description: Minimum 2 tours required
+
+    # --------------------------------------------------------------------------
+    # Entitlement Schemas
+    # --------------------------------------------------------------------------
+
+    EntitlementResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tour_id:
+          type: integer
+        tour_title:
+          type: string
+        bundle_id:
+          type: integer
+          nullable: true
+        source:
+          type: string
+          enum: [direct, bundle, promo, editor_access]
+        created_at:
+          type: string
+          format: date-time
 
     # --------------------------------------------------------------------------
     # Route Schemas

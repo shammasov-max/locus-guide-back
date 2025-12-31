@@ -15,6 +15,7 @@ JWT authentication, OAuth (Google), session management, user preferences.
 │ locale_pref     │ Text?                                      │
 │ ui_lang         │ Text?                                      │
 │ audio_lang      │ Text?                                      │
+│ character       │ JSONB?  -- flexible object, any structure  │
 │ units           │ Text! CHECK('metric','imperial')           │
 │ token_version   │ Int! DEFAULT=0                             │
 │ created_at      │ DateTime(tz)! DEFAULT=now()                │
@@ -69,7 +70,7 @@ JWT authentication, OAuth (Google), session management, user preferences.
 
 | Method | Path | Request | Response |
 |--------|------|---------|----------|
-| GET | `/me` | — | `{id, email, display_name, locale_pref, ui_lang, audio_lang, units, created_at, providers[]}` 200 |
+| GET | `/me` | — | `{id, email, display_name, locale_pref, ui_lang, audio_lang, character, units, created_at, providers[]}` 200 |
 | PATCH | `/me` | `{display_name?, units?, ...}` | Updated UserResponse 200 |
 | DELETE | `/me` | — | `{message}` 200 |
 | POST | `/logout` | `{refresh_token}` | `{message}` 200 |

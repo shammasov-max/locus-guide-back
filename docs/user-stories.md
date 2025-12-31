@@ -87,8 +87,8 @@
 | **US-013a** | User | I want to **listen to the first 4 waypoints free on each paid tour** so that **I can try the service without commitment** | 🟢 95% | — |
 | **US-013b** | User | I want to **purchase a tour via in-app purchase** so that **I can access all content and languages** | 🟢 90% | AC: Purchase unlocks ALL available languages. Server validates receipt. Syncs across devices. Duplicate returns existing entitlement. Price set by Editor (see US-054). |
 | **US-015** | User | I want **fast seamless email authorization on launch** so that **I don't lose purchases when switching phones** | 🟢 90% | — |
-| **US-042** | User | I want to **purchase bundles with discount** so that **I save when buying multiple tours** | 🟢 90% | AC: Shows original crossed out + discounted price. Cannot buy if owns ALL tours. Full price if owns SOME (no partial credit). Creates access to all contained tours. Min 2 tours. |
-| **US-043** | Admin | I want to **create and manage bundles** so that **I can offer advantageous collections to users** | 🟢 90% | AC: Add/remove tours from draft. Admin sets price, system shows discount %. Published bundle cannot remove tours (deactivate only). Same tour can be in multiple bundles. Optional city_id. |
+| **US-042** | User | I want to **purchase bundles with discount** so that **I save when buying multiple tours** | 🟢 90% | AC: Shows original crossed out + discounted price. Bundle HIDDEN if user owns ANY contained tour. Creates entitlements for all contained tours. Min 2 tours. |
+| **US-043** | Admin | I want to **create and manage bundles** so that **I can offer advantageous collections to users** | 🟢 90% | AC: Bundle is immutable after creation (delete and recreate). Admin sets price, system shows discount %. Same tour can be in multiple bundles. Min 2 tours. |
 
 > **Deferred System Stories** (implement during store integration):
 > - US-044: Receipt validation (Apple/Google server-side validation)

@@ -101,7 +101,9 @@ Audio-guided tours with versioned routes, reusable waypoints, and progress track
 
 **Base:** `/api/v1`
 
-### Public (tours)
+**Full OpenAPI spec:** [`docs/api/openapi.yaml`](../api/openapi.yaml)
+
+### Public
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
@@ -115,12 +117,23 @@ Audio-guided tours with versioned routes, reusable waypoints, and progress track
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/runs` | Bearer | Start run (locks route version) |
-| GET | `/runs` | Bearer | My runs (active/completed) |
-| GET | `/runs/{guid}` | Bearer | Run details |
-| PATCH | `/runs/{guid}` | Bearer | Update progress/checkpoints |
-| POST | `/runs/{guid}/abandon` | Bearer | Explicit abandon |
-| POST | `/runs/{guid}/complete` | Bearer | Mark completed |
+| GET | `/me/runs` | Bearer | My runs (active/completed) |
+| POST | `/me/runs` | Bearer | Start run (locks route version) |
+| GET | `/me/runs/{guid}` | Bearer | Run details |
+| PATCH | `/me/runs/{guid}` | Bearer | Update progress/checkpoints |
+| POST | `/me/runs/{guid}/abandon` | Bearer | Explicit abandon |
+| POST | `/me/runs/{guid}/complete` | Bearer | Mark completed |
+
+### User Lists
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/me/await-list` | Bearer | Get awaited tours |
+| PUT | `/me/await-list/{tour_id}` | Bearer | Add tour to await list (idempotent) |
+| DELETE | `/me/await-list/{tour_id}` | Bearer | Remove from await list |
+| GET | `/me/watch-list` | Bearer | Get watched cities |
+| PUT | `/me/watch-list/{city_id}` | Bearer | Add city to watch list (idempotent) |
+| DELETE | `/me/watch-list/{city_id}` | Bearer | Remove from watch list |
 
 ### Editor
 
@@ -128,31 +141,27 @@ Audio-guided tours with versioned routes, reusable waypoints, and progress track
 |--------|------|------|-------------|
 | GET | `/editor/tours` | Bearer+Editor | My tours |
 | POST | `/editor/tours` | Bearer+Editor | Create tour with draft |
+| GET | `/editor/tours/{id}` | Bearer+Editor | Get tour details |
+| PATCH | `/editor/tours/{id}` | Bearer+Editor | Update tour metadata |
+| DELETE | `/editor/tours/{id}` | Bearer+Editor | Archive tour (soft delete) |
 | GET | `/editor/tours/{id}/draft` | Bearer+Editor | Get draft route |
 | PATCH | `/editor/tours/{id}/draft` | Bearer+Editor | Update draft route |
 | POST | `/editor/tours/{id}/publish` | Bearer+Editor | Publish draft → new version |
 | GET | `/editor/tours/{id}/history` | Bearer+Editor | Route version history |
 | POST | `/editor/waypoints` | Bearer+Editor | Create reusable waypoint |
-| POST | `/editor/waypoints/{guid}/audio` | Bearer+Editor | Upload audio (multipart) |
+| GET | `/editor/waypoints/{guid}` | Bearer+Editor | Get waypoint details |
+| PATCH | `/editor/waypoints/{guid}` | Bearer+Editor | Update waypoint (description) |
+| DELETE | `/editor/waypoints/{guid}` | Bearer+Editor | Delete waypoint (if unused) |
+| PUT | `/editor/waypoints/{guid}/audio/{lang}` | Bearer+Editor | Upload/replace audio (idempotent) |
+| DELETE | `/editor/waypoints/{guid}/audio/{lang}` | Bearer+Editor | Delete audio for language |
 
 ### Admin
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/admin/editors` | Bearer+Admin | List editors |
-| POST | `/admin/editors` | Bearer+Admin | Grant editor role |
-| DELETE | `/admin/editors/{id}` | Bearer+Admin | Revoke editor role |
-
-### User Lists
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/me/await-list` | Bearer | Get awaited tours (is_coming_soon) |
-| POST | `/me/await-list/{tour_id}` | Bearer | Add tour to await list |
-| DELETE | `/me/await-list/{tour_id}` | Bearer | Remove from await list |
-| GET | `/me/watch-list` | Bearer | Get watched cities |
-| POST | `/me/watch-list/{city_id}` | Bearer | Add city to watch list |
-| DELETE | `/me/watch-list/{city_id}` | Bearer | Remove from watch list |
+| PUT | `/admin/editors/{account_id}` | Bearer+Admin | Grant editor role (idempotent) |
+| DELETE | `/admin/editors/{account_id}` | Bearer+Admin | Revoke editor role |
 
 **Errors:** 400 (invalid), 401 (auth), 403 (role), 404 (not found), 409 (conflict), 422 (validation)
 

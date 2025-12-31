@@ -52,6 +52,8 @@ JWT authentication, OAuth (Google), session management, user preferences.
 
 **Base:** `/api/v1/auth`
 
+**Full OpenAPI spec:** [`docs/api/openapi.yaml`](../api/openapi.yaml)
+
 ### Public
 
 | Method | Path | Request | Response |

@@ -51,6 +51,8 @@ City autocomplete with i18n + distance sort. No deps.
 
 **Base:** `/api/v1/geo`
 
+**Full OpenAPI spec:** [`docs/api/openapi.yaml`](../api/openapi.yaml)
+
 | Method | Path | Auth | Params | Returns |
 |--------|------|------|--------|---------|
 | GET | `/autocomplete` | - | q! lang lat lon limit | AutocompleteResp |

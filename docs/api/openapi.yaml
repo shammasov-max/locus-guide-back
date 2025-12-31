@@ -1,0 +1,2076 @@
+openapi: 3.1.0
+info:
+  title: Locus Guide API
+  description: |
+    Backend API for multilingual mobile audio guide (iOS/Android).
+
+    ## Authentication
+    - JWT Bearer tokens (HS256, 30min expiry)
+    - Refresh tokens (30 day expiry, rotation on use)
+    - OAuth: Google ID token exchange
+
+    ## Roles
+    - `user` — End user (default). Mobile app access.
+    - `editor` — Content creator. Access to `/editor/*` endpoints.
+    - `admin` — Administrator. Full access including `/admin/*`.
+
+    ## i18n
+    - HSTORE columns: `{lang: value}` for multilingual text
+    - Audio files: `/uploads/audio/{waypoint_guid}/{lang}.mp3`
+  version: 1.0.0
+  contact:
+    name: Locus Guide Team
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+tags:
+  - name: auth
+    description: Authentication, registration, password reset
+  - name: geo
+    description: City autocomplete with i18n and distance sorting
+  - name: cities
+    description: Cities with tour counts
+  - name: tours
+    description: Public tour listings and details
+  - name: runs
+    description: User tour runs and progress tracking
+  - name: editor
+    description: Editor content management (requires editor role)
+  - name: admin
+    description: Admin operations (requires admin role)
+
+paths:
+  # ============================================================================
+  # AUTH DOMAIN
+  # ============================================================================
+
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Register new account
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Login with email/password
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/google:
+    post:
+      tags: [auth]
+      summary: Login/register with Google OAuth
+      operationId: googleAuth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id_token]
+              properties:
+                id_token:
+                  type: string
+                  description: Google ID token from mobile SDK
+      responses:
+        '200':
+          description: Auth successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Refresh access token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Tokens refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/password-reset/request:
+    post:
+      tags: [auth]
+      summary: Request password reset email
+      operationId: requestPasswordReset
+      description: Always returns success to prevent email enumeration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Reset email sent (if account exists)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+
+  /auth/password-reset/confirm:
+    post:
+      tags: [auth]
+      summary: Confirm password reset with token
+      operationId: confirmPasswordReset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, new_password]
+              properties:
+                token:
+                  type: string
+                new_password:
+                  type: string
+                  minLength: 8
+      responses:
+        '200':
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: Get current user profile
+      operationId: getMe
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      tags: [auth]
+      summary: Update current user profile
+      operationId: updateMe
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    delete:
+      tags: [auth]
+      summary: Delete current user account
+      operationId: deleteMe
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Account deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Logout (revoke refresh token)
+      operationId: logout
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout-all:
+    post:
+      tags: [auth]
+      summary: Logout all devices (increment token_version)
+      operationId: logoutAll
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: All sessions revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ============================================================================
+  # GEO DOMAIN
+  # ============================================================================
+
+  /geo/autocomplete:
+    get:
+      tags: [geo]
+      summary: City autocomplete search
+      operationId: autocompleteCity
+      description: |
+        Search cities by prefix with i18n support.
+        Results sorted by distance (if coords provided) then population.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+          description: Search query (prefix match)
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: en
+          description: Language code for results
+        - name: lat
+          in: query
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+          description: User latitude for distance sorting
+        - name: lon
+          in: query
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+          description: User longitude for distance sorting
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+          description: Max results to return
+      responses:
+        '200':
+          description: Autocomplete results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutocompleteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /geo/languages:
+    get:
+      tags: [geo]
+      summary: Get supported languages
+      operationId: getLanguages
+      responses:
+        '200':
+          description: Available languages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  languages:
+                    type: array
+                    items:
+                      type: string
+                  default:
+                    type: string
+
+  # ============================================================================
+  # CITIES DOMAIN
+  # ============================================================================
+
+  /cities:
+    get:
+      tags: [cities]
+      summary: List cities with tour counts
+      operationId: listCities
+      parameters:
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: en
+        - name: has_tours
+          in: query
+          schema:
+            type: boolean
+          description: Filter to cities with published tours only
+      responses:
+        '200':
+          description: Cities list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cities:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CityWithCount'
+
+  /cities/{city_id}/tours:
+    get:
+      tags: [cities]
+      summary: List tours in a city
+      operationId: listCityTours
+      parameters:
+        - name: city_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: en
+      responses:
+        '200':
+          description: Tours in city
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tours:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TourSummary'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # TOURS DOMAIN (PUBLIC)
+  # ============================================================================
+
+  /tours:
+    get:
+      tags: [tours]
+      summary: List all tours
+      operationId: listTours
+      parameters:
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: en
+        - name: city_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by city
+        - name: is_coming_soon
+          in: query
+          schema:
+            type: boolean
+          description: Filter by coming soon status
+      responses:
+        '200':
+          description: Tours list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tours:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TourSummary'
+
+  /tours/{tour_id}:
+    get:
+      tags: [tours]
+      summary: Get tour details with active route
+      operationId: getTour
+      parameters:
+        - name: tour_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: en
+      responses:
+        '200':
+          description: Tour details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TourDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tours/{tour_id}/preview:
+    get:
+      tags: [tours]
+      summary: Get tour preview (first 4 waypoints free)
+      operationId: getTourPreview
+      parameters:
+        - name: tour_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: en
+      responses:
+        '200':
+          description: Tour preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TourPreview'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # RUNS DOMAIN (USER)
+  # ============================================================================
+
+  /me/runs:
+    get:
+      tags: [runs]
+      summary: List my runs
+      operationId: listMyRuns
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, completed, abandoned]
+          description: Filter by run status
+      responses:
+        '200':
+          description: My runs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  runs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RunSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [runs]
+      summary: Start a new run
+      operationId: startRun
+      security:
+        - bearerAuth: []
+      description: |
+        Creates a new run locked to the tour's current active_route_id.
+        The route version is immutable for this run's lifetime.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tour_id]
+              properties:
+                tour_id:
+                  type: integer
+                is_simulation:
+                  type: boolean
+                  default: false
+                  description: Editor simulation mode (excluded from analytics)
+      responses:
+        '201':
+          description: Run started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Active run already exists for this tour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /me/runs/{run_guid}:
+    get:
+      tags: [runs]
+      summary: Get run details
+      operationId: getRun
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: run_guid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Run details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [runs]
+      summary: Update run progress
+      operationId: updateRun
+      security:
+        - bearerAuth: []
+      description: |
+        Update completed checkpoints and/or last position.
+        Uses set-union merge for checkpoints (progress never lost).
+      parameters:
+        - name: run_guid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRunRequest'
+      responses:
+        '200':
+          description: Run updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /me/runs/{run_guid}/abandon:
+    post:
+      tags: [runs]
+      summary: Abandon run
+      operationId: abandonRun
+      security:
+        - bearerAuth: []
+      description: |
+        Explicitly abandon the run. Sets abandoned_at timestamp.
+        User can start a new run (on potentially newer route version).
+      parameters:
+        - name: run_guid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Run abandoned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /me/runs/{run_guid}/complete:
+    post:
+      tags: [runs]
+      summary: Mark run as completed
+      operationId: completeRun
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: run_guid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Run completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # USER LISTS (AWAIT/WATCH)
+  # ============================================================================
+
+  /me/await-list:
+    get:
+      tags: [runs]
+      summary: Get my await list (coming soon tours)
+      operationId: getAwaitList
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Await list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tours:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TourSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /me/await-list/{tour_id}:
+    put:
+      tags: [runs]
+      summary: Add tour to await list
+      operationId: addToAwaitList
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tour_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Tour already in await list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '201':
+          description: Added to await list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [runs]
+      summary: Remove tour from await list
+      operationId: removeFromAwaitList
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tour_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Removed from await list
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /me/watch-list:
+    get:
+      tags: [runs]
+      summary: Get my watch list (cities)
+      operationId: getWatchList
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Watch list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cities:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CityWithCount'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /me/watch-list/{city_id}:
+    put:
+      tags: [runs]
+      summary: Add city to watch list
+      operationId: addToWatchList
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: city_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: City already in watch list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '201':
+          description: Added to watch list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [runs]
+      summary: Remove city from watch list
+      operationId: removeFromWatchList
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: city_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Removed from watch list
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # EDITOR DOMAIN
+  # ============================================================================
+
+  /editor/tours:
+    get:
+      tags: [editor]
+      summary: List my tours (as editor)
+      operationId: listEditorTours
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Editor's tours
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tours:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EditorTourSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [editor]
+      summary: Create new tour with draft route
+      operationId: createTour
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTourRequest'
+      responses:
+        '201':
+          description: Tour created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditorTourDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /editor/tours/{tour_id}:
+    get:
+      tags: [editor]
+      summary: Get tour details (editor view)
+      operationId: getEditorTour
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tour_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Tour details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditorTourDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [editor]
+      summary: Update tour metadata
+      operationId: updateTour
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tour_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTourRequest'
+      responses:
+        '200':
+          description: Tour updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditorTourDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [editor]
+      summary: Archive tour (soft delete)
+      operationId: archiveTour
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tour_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Tour archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /editor/tours/{tour_id}/draft:
+    get:
+      tags: [editor]
+      summary: Get draft route for tour
+      operationId: getDraftRoute
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tour_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Draft route
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [editor]
+      summary: Update draft route
+      operationId: updateDraftRoute
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tour_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRouteRequest'
+      responses:
+        '200':
+          description: Draft updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /editor/tours/{tour_id}/publish:
+    post:
+      tags: [editor]
+      summary: Publish draft as new route version
+      operationId: publishRoute
+      security:
+        - bearerAuth: []
+      description: |
+        Creates new Route version from draft.
+        Updates Tour.active_route_id to new version.
+        In-progress Runs stay locked to their original route.
+      parameters:
+        - name: tour_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '201':
+          description: Route published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Draft not ready for publish
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /editor/tours/{tour_id}/history:
+    get:
+      tags: [editor]
+      summary: Get route version history
+      operationId: getRouteHistory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tour_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Route history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  versions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RouteVersion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /editor/waypoints:
+    post:
+      tags: [editor]
+      summary: Create reusable waypoint
+      operationId: createWaypoint
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWaypointRequest'
+      responses:
+        '201':
+          description: Waypoint created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaypointDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /editor/waypoints/{waypoint_guid}:
+    get:
+      tags: [editor]
+      summary: Get waypoint details
+      operationId: getWaypoint
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: waypoint_guid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Waypoint details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaypointDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [editor]
+      summary: Update waypoint (description only, guid/is_checkpoint immutable)
+      operationId: updateWaypoint
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: waypoint_guid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWaypointRequest'
+      responses:
+        '200':
+          description: Waypoint updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaypointDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [editor]
+      summary: Delete waypoint (only if not used in any route)
+      operationId: deleteWaypoint
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: waypoint_guid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Waypoint deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Waypoint in use by routes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /editor/waypoints/{waypoint_guid}/audio/{lang}:
+    put:
+      tags: [editor]
+      summary: Upload or replace audio for waypoint
+      operationId: uploadWaypointAudio
+      description: |
+        Upload audio file for a specific language. Replaces existing audio if present.
+        Idempotent: uploading same file twice has same result.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: waypoint_guid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: lang
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Language code (e.g., en, ru)
+      requestBody:
+        required: true
+        content:
+          audio/mpeg:
+            schema:
+              type: string
+              format: binary
+              description: MP3 audio file
+      responses:
+        '200':
+          description: Audio replaced
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                  lang:
+                    type: string
+        '201':
+          description: Audio uploaded (new)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                  lang:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    delete:
+      tags: [editor]
+      summary: Delete audio for waypoint language
+      operationId: deleteWaypointAudio
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: waypoint_guid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: lang
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Audio deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # ADMIN DOMAIN
+  # ============================================================================
+
+  /admin/editors:
+    get:
+      tags: [admin]
+      summary: List editors
+      operationId: listEditors
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Editors list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  editors:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EditorInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/editors/{account_id}:
+    put:
+      tags: [admin]
+      summary: Grant editor role to account
+      operationId: grantEditorRole
+      description: |
+        Idempotent: granting editor role to existing editor returns 200.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Account already has editor role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditorInfo'
+        '201':
+          description: Editor role granted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditorInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [admin]
+      summary: Revoke editor role
+      operationId: revokeEditorRole
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Editor role revoked
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+# ==============================================================================
+# COMPONENTS
+# ==============================================================================
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT access token (HS256, 30min expiry).
+        Claims: `sub` (account_id), `tv` (token_version), `exp`, `type`.
+
+  schemas:
+    # --------------------------------------------------------------------------
+    # Auth Schemas
+    # --------------------------------------------------------------------------
+
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        display_name:
+          type: string
+        units:
+          type: string
+          enum: [metric, imperial]
+          default: metric
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/UserResponse'
+        tokens:
+          $ref: '#/components/schemas/TokenResponse'
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+          description: Access token expiry in seconds
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+          nullable: true
+        role:
+          type: string
+          enum: [user, editor, admin]
+        locale_pref:
+          type: string
+          nullable: true
+        ui_lang:
+          type: string
+          nullable: true
+        audio_lang:
+          type: string
+          nullable: true
+        units:
+          type: string
+          enum: [metric, imperial]
+        created_at:
+          type: string
+          format: date-time
+        providers:
+          type: array
+          items:
+            type: string
+          description: Linked auth providers (email, google)
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        display_name:
+          type: string
+        locale_pref:
+          type: string
+        ui_lang:
+          type: string
+        audio_lang:
+          type: string
+        units:
+          type: string
+          enum: [metric, imperial]
+
+    # --------------------------------------------------------------------------
+    # Geo Schemas
+    # --------------------------------------------------------------------------
+
+    AutocompleteResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        lang:
+          type: string
+        user_location:
+          $ref: '#/components/schemas/Coordinates'
+        count:
+          type: integer
+        cities:
+          type: array
+          items:
+            $ref: '#/components/schemas/CityResult'
+
+    CityResult:
+      type: object
+      properties:
+        geoname_id:
+          type: integer
+        name:
+          type: string
+        local_name:
+          type: string
+        country_code:
+          type: string
+        country_name:
+          type: string
+          nullable: true
+        admin1:
+          type: string
+          nullable: true
+        population:
+          type: integer
+        lat:
+          type: number
+        lon:
+          type: number
+        distance_km:
+          type: number
+          nullable: true
+        timezone:
+          type: string
+          nullable: true
+
+    CityWithCount:
+      type: object
+      properties:
+        geoname_id:
+          type: integer
+        name:
+          type: string
+        country_code:
+          type: string
+        tour_count:
+          type: integer
+
+    Coordinates:
+      type: object
+      properties:
+        lat:
+          type: number
+        lon:
+          type: number
+
+    # --------------------------------------------------------------------------
+    # Tour Schemas
+    # --------------------------------------------------------------------------
+
+    TourSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        city_id:
+          type: integer
+          nullable: true
+        city_name:
+          type: string
+          nullable: true
+        price_usd:
+          type: number
+          nullable: true
+        is_coming_soon:
+          type: boolean
+        distance_m:
+          type: integer
+          nullable: true
+        elevation_m:
+          type: integer
+          nullable: true
+        estimated_min:
+          type: integer
+          nullable: true
+        waypoint_count:
+          type: integer
+          nullable: true
+
+    TourDetail:
+      allOf:
+        - $ref: '#/components/schemas/TourSummary'
+        - type: object
+          properties:
+            description:
+              type: string
+              nullable: true
+            active_route:
+              $ref: '#/components/schemas/RouteDetail'
+
+    TourPreview:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        waypoints:
+          type: array
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/WaypointPreview'
+
+    WaypointPreview:
+      type: object
+      properties:
+        guid:
+          type: string
+          format: uuid
+        coordinates:
+          $ref: '#/components/schemas/Coordinates'
+        description:
+          type: string
+          nullable: true
+        is_checkpoint:
+          type: boolean
+
+    # --------------------------------------------------------------------------
+    # Route Schemas
+    # --------------------------------------------------------------------------
+
+    RouteDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        tour_id:
+          type: integer
+        version:
+          type: integer
+        status:
+          type: string
+          enum: [draft, published]
+        geojson:
+          type: object
+          nullable: true
+        waypoints:
+          type: array
+          items:
+            $ref: '#/components/schemas/WaypointDetail'
+        distance_m:
+          type: integer
+          nullable: true
+        elevation_m:
+          type: integer
+          nullable: true
+        estimated_min:
+          type: integer
+          nullable: true
+        languages:
+          type: object
+          additionalProperties:
+            type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    RouteVersion:
+      type: object
+      properties:
+        id:
+          type: integer
+        version:
+          type: integer
+        status:
+          type: string
+          enum: [draft, published]
+        created_at:
+          type: string
+          format: date-time
+        waypoint_count:
+          type: integer
+
+    UpdateRouteRequest:
+      type: object
+      properties:
+        geojson:
+          type: object
+        waypoint_guids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        distance_m:
+          type: integer
+        elevation_m:
+          type: integer
+        estimated_min:
+          type: integer
+        languages:
+          type: object
+          additionalProperties:
+            type: boolean
+
+    # --------------------------------------------------------------------------
+    # Waypoint Schemas
+    # --------------------------------------------------------------------------
+
+    WaypointDetail:
+      type: object
+      properties:
+        guid:
+          type: string
+          format: uuid
+        coordinates:
+          $ref: '#/components/schemas/Coordinates'
+        description_i18n:
+          type: object
+          additionalProperties:
+            type: string
+        is_checkpoint:
+          type: boolean
+        audio_urls:
+          type: object
+          additionalProperties:
+            type: string
+            format: uri
+          description: Map of lang -> audio URL
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: integer
+          format: int64
+
+    CreateWaypointRequest:
+      type: object
+      required: [lat, lon]
+      properties:
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lon:
+          type: number
+          minimum: -180
+          maximum: 180
+        description_i18n:
+          type: object
+          additionalProperties:
+            type: string
+        is_checkpoint:
+          type: boolean
+          default: true
+
+    UpdateWaypointRequest:
+      type: object
+      properties:
+        description_i18n:
+          type: object
+          additionalProperties:
+            type: string
+
+    # --------------------------------------------------------------------------
+    # Run Schemas
+    # --------------------------------------------------------------------------
+
+    RunSummary:
+      type: object
+      properties:
+        guid:
+          type: string
+          format: uuid
+        tour_id:
+          type: integer
+        tour_title:
+          type: string
+        route_version:
+          type: integer
+        status:
+          type: string
+          enum: [active, completed, abandoned]
+        progress_percent:
+          type: number
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        abandoned_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    RunDetail:
+      allOf:
+        - $ref: '#/components/schemas/RunSummary'
+        - type: object
+          properties:
+            route_id:
+              type: integer
+            completed_checkpoints:
+              type: array
+              items:
+                type: string
+                format: uuid
+            total_checkpoints:
+              type: integer
+            is_simulation:
+              type: boolean
+            last_position:
+              $ref: '#/components/schemas/Coordinates'
+            updated_at:
+              type: string
+              format: date-time
+              nullable: true
+
+    UpdateRunRequest:
+      type: object
+      properties:
+        completed_checkpoints:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Checkpoints to add (set-union merged)
+        last_position:
+          $ref: '#/components/schemas/Coordinates'
+
+    # --------------------------------------------------------------------------
+    # Editor Schemas
+    # --------------------------------------------------------------------------
+
+    EditorTourSummary:
+      allOf:
+        - $ref: '#/components/schemas/TourSummary'
+        - type: object
+          properties:
+            is_archived:
+              type: boolean
+            has_draft_changes:
+              type: boolean
+            draft_version:
+              type: integer
+            active_version:
+              type: integer
+              nullable: true
+
+    EditorTourDetail:
+      allOf:
+        - $ref: '#/components/schemas/EditorTourSummary'
+        - type: object
+          properties:
+            description_i18n:
+              type: object
+              additionalProperties:
+                type: string
+            title_i18n:
+              type: object
+              additionalProperties:
+                type: string
+            draft_route:
+              $ref: '#/components/schemas/RouteDetail'
+            active_route:
+              $ref: '#/components/schemas/RouteDetail'
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+              nullable: true
+
+    CreateTourRequest:
+      type: object
+      required: [title_i18n]
+      properties:
+        city_id:
+          type: integer
+        title_i18n:
+          type: object
+          additionalProperties:
+            type: string
+        description_i18n:
+          type: object
+          additionalProperties:
+            type: string
+        price_usd:
+          type: number
+        is_coming_soon:
+          type: boolean
+          default: true
+
+    UpdateTourRequest:
+      type: object
+      properties:
+        city_id:
+          type: integer
+        title_i18n:
+          type: object
+          additionalProperties:
+            type: string
+        description_i18n:
+          type: object
+          additionalProperties:
+            type: string
+        price_usd:
+          type: number
+        is_coming_soon:
+          type: boolean
+
+    # --------------------------------------------------------------------------
+    # Admin Schemas
+    # --------------------------------------------------------------------------
+
+    EditorInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        tour_count:
+          type: integer
+
+    # --------------------------------------------------------------------------
+    # Common Schemas
+    # --------------------------------------------------------------------------
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+          nullable: true
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+          nullable: true
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Unauthorized:
+      description: Authentication required or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Conflict:
+      description: Resource conflict (already exists)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

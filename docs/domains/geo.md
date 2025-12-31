@@ -49,10 +49,12 @@ City autocomplete with i18n + distance sort. No deps.
 
 ## API
 
+**Base:** `/api/v1/geo`
+
 | Method | Path | Auth | Params | Returns |
 |--------|------|------|--------|---------|
-| GET | /autocomplete | - | q! lang lat lon limit | AutocompleteResp |
-| GET | /languages | - | - | {languages[], default} |
+| GET | `/autocomplete` | - | q! lang lat lon limit | AutocompleteResp |
+| GET | `/languages` | - | - | {languages[], default} |
 
 **Params**: `q` (1-200), `lang` (en), `lat` (-90..90), `lon` (-180..180), `limit` (1-50, def:10)
 **Sort**: distance (if coords/GeoIP) → population DESC
@@ -71,3 +73,5 @@ City autocomplete with i18n + distance sort. No deps.
 ## Stories
 
 US-001: Cities with tour counts | US-002: Auto-detect location
+
+*Infrastructure: see [INFRA.md](../INFRA.md#geo-domain)*

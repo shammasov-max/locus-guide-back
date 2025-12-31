@@ -23,6 +23,7 @@ Audio-guided tours with versioned routes, reusable waypoints, and progress track
 │ title_i18n        │ HSTORE! {lang:text}          │
 │ description_i18n  │ HSTORE                       │
 │ price_usd         │ Decimal(10,2)                │
+│ is_coming_soon    │ Bool! DEFAULT=false          │
 │ is_archived*      │ Bool! DEFAULT=false          │
 │ created_at        │ Timestamptz! DEFAULT=now()   │
 │ updated_at        │ Timestamptz                  │
@@ -72,6 +73,26 @@ Audio-guided tours with versioned routes, reusable waypoints, and progress track
 │ updated_at        │ Timestamptz                  │
 └──────────────────────────────────────────────────┘
 * indexed
+
+┌──────────────────────────────────────────────────┐
+│                   AwaitList                      │
+│──────────────────────────────────────────────────│
+│ id                │ BigInt PK                    │
+│ account_id*       │ BigInt! FK→Account           │
+│ tour_id*          │ Int! FK→Tour                 │
+│ created_at        │ Timestamptz! DEFAULT=now()   │
+│ UNIQUE(account_id, tour_id)                      │
+└──────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────┐
+│                   WatchList                      │
+│──────────────────────────────────────────────────│
+│ id                │ BigInt PK                    │
+│ account_id*       │ BigInt! FK→Account           │
+│ city_id*          │ Int! FK→City                 │
+│ created_at        │ Timestamptz! DEFAULT=now()   │
+│ UNIQUE(account_id, city_id)                      │
+└──────────────────────────────────────────────────┘
 ```
 
 ---
@@ -80,15 +101,15 @@ Audio-guided tours with versioned routes, reusable waypoints, and progress track
 
 **Base:** `/api/v1`
 
-### Public
+### Public (tours)
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/cities` | - | Cities with tour counts |
-| GET | `/cities/{id}/tours` | - | Tours in city |
 | GET | `/tours` | - | All tours (filterable) |
 | GET | `/tours/{id}` | - | Tour details + active route |
 | GET | `/tours/{id}/preview` | - | First 4 waypoints (free) |
+| GET | `/cities` | - | Cities with tour counts |
+| GET | `/cities/{id}/tours` | - | Tours in city |
 
 ### Runs (User)
 
@@ -122,6 +143,17 @@ Audio-guided tours with versioned routes, reusable waypoints, and progress track
 | POST | `/admin/editors` | Bearer+Admin | Grant editor role |
 | DELETE | `/admin/editors/{id}` | Bearer+Admin | Revoke editor role |
 
+### User Lists
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/me/await-list` | Bearer | Get awaited tours (is_coming_soon) |
+| POST | `/me/await-list/{tour_id}` | Bearer | Add tour to await list |
+| DELETE | `/me/await-list/{tour_id}` | Bearer | Remove from await list |
+| GET | `/me/watch-list` | Bearer | Get watched cities |
+| POST | `/me/watch-list/{city_id}` | Bearer | Add city to watch list |
+| DELETE | `/me/watch-list/{city_id}` | Bearer | Remove from watch list |
+
 **Errors:** 400 (invalid), 401 (auth), 403 (role), 404 (not found), 409 (conflict), 422 (validation)
 
 ---
@@ -153,6 +185,26 @@ Audio-guided tours with versioned routes, reusable waypoints, and progress track
 - **Completed**: `completed_at IS NOT NULL`
 - **Abandoned**: `abandoned_at IS NOT NULL` (explicit user action only)
 - **Simulation**: `is_simulation=true` (Editor testing, excluded from analytics)
+
+### Run Locking (ADR-002)
+- **Content shared**: Waypoint text/audio updates visible to all Runs
+- **Structure locked**: Route waypoint order/membership locked at Run start
+- **Restart**: After abandon, new Run starts on current `active_route_id` (may be newer version)
+- **No timeout**: Runs stay active indefinitely until user completes or abandons
+
+### Sync Strategy (ADR-003)
+- **Set-union merge** for `completed_checkpoints[]`
+- User never loses progress; if completed on any device, stays completed
+- Conflict resolution: merge arrays, deduplicate UUIDs
+
+### Coming Soon Tours
+- `is_coming_soon=true`: Tour visible in listings but not purchasable
+- Users can add to **Await List** for publish notification
+- Flag cleared when first `active_route_id` set (on publish)
+
+### Watch List
+- Users watch Cities for new tour notifications
+- Notification sent when any tour in watched city gets first publish
 
 ---
 

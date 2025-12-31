@@ -11,6 +11,7 @@ JWT authentication, OAuth (Google), session management, user preferences.
 │ id              │ BigInt PK                                  │
 │ email           │ String(255)! UNIQUE*                       │
 │ display_name    │ Text?                                      │
+│ role            │ Text! CHECK('user','editor','admin') DEF=user│
 │ locale_pref     │ Text?                                      │
 │ ui_lang         │ Text?                                      │
 │ audio_lang      │ Text?                                      │
@@ -49,7 +50,7 @@ JWT authentication, OAuth (Google), session management, user preferences.
 
 ## API
 
-**Base:** `/auth`
+**Base:** `/api/v1/auth`
 
 ### Public
 
@@ -75,6 +76,11 @@ JWT authentication, OAuth (Google), session management, user preferences.
 **Errors:** 400 (bad request), 401 (invalid auth), 404 (not found), 409 (email exists), 422 (validation)
 
 ## Patterns
+
+**Roles:** Single role per account. Checked via JWT claim or DB lookup.
+- `user` — End user (default). Mobile app access only.
+- `editor` — Content creator. Can create/edit tours, access `/editor/*` endpoints.
+- `admin` — Administrator. Full access including `/admin/*` endpoints.
 
 **Password:** Argon2id `time=3, memory=64MB (65536KB), parallelism=4, hash_len=32, salt_len=16`
 

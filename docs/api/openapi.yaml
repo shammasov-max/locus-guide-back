@@ -4,10 +4,24 @@ info:
   description: |
     Backend API for multilingual mobile audio guide (iOS/Android).
 
-    ## Authentication
-    - JWT Bearer tokens (HS256, 30min expiry)
-    - Refresh tokens (30 day expiry, rotation on use)
-    - OAuth: Google ID token exchange
+    ## Authentication (SuperTokens)
+
+    Authentication is handled by SuperTokens SDK at `/auth/*` base path:
+    - **Email/Password:** `POST /auth/signup`, `POST /auth/signin`
+    - **OAuth (Google):** `GET /auth/authorisationurl`, `POST /auth/signinup/callback/google`
+    - **Session:** Automatic via HTTP-only cookies (`sAccessToken`, `sRefreshToken`)
+    - **Password Reset:** `POST /auth/user/password/reset/token`, `POST /auth/user/password/reset`
+    - **Logout:** `POST /auth/signout`
+
+    See: https://supertokens.com/docs/thirdpartyemailpassword/apis
+
+    ## Custom Auth Endpoints
+
+    User profile management at `/api/v1/auth/*`:
+    - `GET /auth/me` — Profile + preferences
+    - `PATCH /auth/me` — Update preferences
+    - `DELETE /auth/me` — Delete account
+    - `POST /auth/logout-all` — Revoke all sessions
 
     ## Roles
     - `user` — End user (default). Mobile app access.
@@ -27,7 +41,7 @@ servers:
 
 tags:
   - name: auth
-    description: Authentication, registration, password reset
+    description: User profile and session management (core auth handled by SuperTokens at /auth/*)
   - name: geo
     description: City autocomplete with i18n and distance sorting
   - name: cities
@@ -49,154 +63,19 @@ paths:
   # ============================================================================
   # AUTH DOMAIN
   # ============================================================================
-
-  /auth/register:
-    post:
-      tags: [auth]
-      summary: Register new account
-      operationId: register
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RegisterRequest'
-      responses:
-        '201':
-          description: Account created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthResponse'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-
-  /auth/login:
-    post:
-      tags: [auth]
-      summary: Login with email/password
-      operationId: login
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LoginRequest'
-      responses:
-        '200':
-          description: Login successful
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-  /auth/google:
-    post:
-      tags: [auth]
-      summary: Login/register with Google OAuth
-      operationId: googleAuth
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [id_token]
-              properties:
-                id_token:
-                  type: string
-                  description: Google ID token from mobile SDK
-      responses:
-        '200':
-          description: Auth successful
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-  /auth/refresh:
-    post:
-      tags: [auth]
-      summary: Refresh access token
-      operationId: refreshToken
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [refresh_token]
-              properties:
-                refresh_token:
-                  type: string
-      responses:
-        '200':
-          description: Tokens refreshed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TokenResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-  /auth/password-reset/request:
-    post:
-      tags: [auth]
-      summary: Request password reset email
-      operationId: requestPasswordReset
-      description: Always returns success to prevent email enumeration
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [email]
-              properties:
-                email:
-                  type: string
-                  format: email
-      responses:
-        '200':
-          description: Reset email sent (if account exists)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageResponse'
-
-  /auth/password-reset/confirm:
-    post:
-      tags: [auth]
-      summary: Confirm password reset with token
-      operationId: confirmPasswordReset
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [token, new_password]
-              properties:
-                token:
-                  type: string
-                new_password:
-                  type: string
-                  minLength: 8
-      responses:
-        '200':
-          description: Password reset successful
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+  #
+  # NOTE: Core authentication endpoints are handled by SuperTokens SDK at /auth/*:
+  # - POST /auth/signup          - Email/password registration
+  # - POST /auth/signin          - Email/password login
+  # - POST /auth/signout         - Logout (revoke session)
+  # - POST /auth/session/refresh - Refresh access token
+  # - GET  /auth/authorisationurl - Get OAuth redirect URL
+  # - POST /auth/signinup/callback/:providerId - OAuth callback
+  # - POST /auth/user/password/reset/token - Request password reset
+  # - POST /auth/user/password/reset - Confirm password reset
+  #
+  # See: https://supertokens.com/docs/thirdpartyemailpassword/apis
+  # ============================================================================
 
   /auth/me:
     get:
@@ -204,7 +83,7 @@ paths:
       summary: Get current user profile
       operationId: getMe
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       responses:
         '200':
           description: User profile
@@ -220,7 +99,7 @@ paths:
       summary: Update current user profile
       operationId: updateMe
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       requestBody:
         required: true
         content:
@@ -243,8 +122,11 @@ paths:
       tags: [auth]
       summary: Delete current user account
       operationId: deleteMe
+      description: |
+        Deletes the user's Account from application database and
+        removes the user from SuperTokens Core. Revokes all sessions.
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       responses:
         '200':
           description: Account deleted
@@ -255,40 +137,16 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /auth/logout:
-    post:
-      tags: [auth]
-      summary: Logout (revoke refresh token)
-      operationId: logout
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [refresh_token]
-              properties:
-                refresh_token:
-                  type: string
-      responses:
-        '200':
-          description: Logged out
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
   /auth/logout-all:
     post:
       tags: [auth]
-      summary: Logout all devices (increment token_version)
+      summary: Logout all devices
       operationId: logoutAll
+      description: |
+        Revokes all active sessions for the current user via SuperTokens.
+        Use when user wants to sign out everywhere (e.g., password change).
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       responses:
         '200':
           description: All sessions revoked
@@ -554,7 +412,7 @@ paths:
             default: en
       security:
         - {}
-        - bearerAuth: []
+        - sessionAuth: []
       responses:
         '200':
           description: Bundles list
@@ -604,7 +462,7 @@ paths:
       summary: List my runs
       operationId: listMyRuns
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: status
           in: query
@@ -632,7 +490,7 @@ paths:
       summary: Start a new run
       operationId: startRun
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       description: |
         Creates a new run locked to the tour's current active_route_id.
         The route version is immutable for this run's lifetime.
@@ -674,7 +532,7 @@ paths:
       summary: Get run details
       operationId: getRun
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: run_guid
           in: path
@@ -699,7 +557,7 @@ paths:
       summary: Update run progress
       operationId: updateRun
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       description: |
         Update completed checkpoints and/or last position.
         Uses set-union merge for checkpoints (progress never lost).
@@ -734,7 +592,7 @@ paths:
       summary: Abandon run
       operationId: abandonRun
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       description: |
         Explicitly abandon the run. Sets abandoned_at timestamp.
         User can start a new run (on potentially newer route version).
@@ -763,7 +621,7 @@ paths:
       summary: Mark run as completed
       operationId: completeRun
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: run_guid
           in: path
@@ -793,7 +651,7 @@ paths:
       summary: Get my await list (coming soon tours)
       operationId: getAwaitList
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       responses:
         '200':
           description: Await list
@@ -815,7 +673,7 @@ paths:
       summary: Add tour to await list
       operationId: addToAwaitList
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: tour_id
           in: path
@@ -845,7 +703,7 @@ paths:
       summary: Remove tour from await list
       operationId: removeFromAwaitList
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: tour_id
           in: path
@@ -866,7 +724,7 @@ paths:
       summary: Get my watch list (cities)
       operationId: getWatchList
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       responses:
         '200':
           description: Watch list
@@ -888,7 +746,7 @@ paths:
       summary: Add city to watch list
       operationId: addToWatchList
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: city_id
           in: path
@@ -918,7 +776,7 @@ paths:
       summary: Remove city from watch list
       operationId: removeFromWatchList
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: city_id
           in: path
@@ -943,7 +801,7 @@ paths:
       summary: Get my purchased tours
       operationId: getMyEntitlements
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       responses:
         '200':
           description: My entitlements
@@ -969,7 +827,7 @@ paths:
       summary: List my tours (as editor)
       operationId: listEditorTours
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       responses:
         '200':
           description: Editor's tours
@@ -992,7 +850,7 @@ paths:
       summary: Create new tour with draft route
       operationId: createTour
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       requestBody:
         required: true
         content:
@@ -1019,7 +877,7 @@ paths:
       summary: Get tour details (editor view)
       operationId: getEditorTour
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: tour_id
           in: path
@@ -1045,7 +903,7 @@ paths:
       summary: Update tour metadata
       operationId: updateTour
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: tour_id
           in: path
@@ -1077,7 +935,7 @@ paths:
       summary: Archive tour (soft delete)
       operationId: archiveTour
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: tour_id
           in: path
@@ -1104,7 +962,7 @@ paths:
       summary: Get draft route for tour
       operationId: getDraftRoute
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: tour_id
           in: path
@@ -1130,7 +988,7 @@ paths:
       summary: Update draft route
       operationId: updateDraftRoute
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: tour_id
           in: path
@@ -1163,7 +1021,7 @@ paths:
       summary: Publish draft as new route version
       operationId: publishRoute
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       description: |
         Creates new Route version from draft.
         Updates Tour.active_route_id to new version.
@@ -1200,7 +1058,7 @@ paths:
       summary: Get route version history
       operationId: getRouteHistory
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: tour_id
           in: path
@@ -1232,7 +1090,7 @@ paths:
       summary: Create reusable waypoint
       operationId: createWaypoint
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       requestBody:
         required: true
         content:
@@ -1259,7 +1117,7 @@ paths:
       summary: Get waypoint details
       operationId: getWaypoint
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: waypoint_guid
           in: path
@@ -1286,7 +1144,7 @@ paths:
       summary: Update waypoint (description only, guid/is_checkpoint immutable)
       operationId: updateWaypoint
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: waypoint_guid
           in: path
@@ -1319,7 +1177,7 @@ paths:
       summary: Delete waypoint (only if not used in any route)
       operationId: deleteWaypoint
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: waypoint_guid
           in: path
@@ -1352,7 +1210,7 @@ paths:
         Upload audio file for a specific language. Replaces existing audio if present.
         Idempotent: uploading same file twice has same result.
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: waypoint_guid
           in: path
@@ -1413,7 +1271,7 @@ paths:
       summary: Delete audio for waypoint language
       operationId: deleteWaypointAudio
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: waypoint_guid
           in: path
@@ -1446,7 +1304,7 @@ paths:
       summary: List editors
       operationId: listEditors
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       responses:
         '200':
           description: Editors list
@@ -1472,7 +1330,7 @@ paths:
       description: |
         Idempotent: granting editor role to existing editor returns 200.
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: account_id
           in: path
@@ -1505,7 +1363,7 @@ paths:
       summary: Revoke editor role
       operationId: revokeEditorRole
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: account_id
           in: path
@@ -1529,7 +1387,7 @@ paths:
       summary: List all bundles
       operationId: listAdminBundles
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: is_deleted
           in: query
@@ -1558,7 +1416,7 @@ paths:
       summary: Create bundle (draft)
       operationId: createBundle
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       requestBody:
         required: true
         content:
@@ -1585,7 +1443,7 @@ paths:
       summary: Get bundle details (admin view)
       operationId: getAdminBundle
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: bundle_id
           in: path
@@ -1612,7 +1470,7 @@ paths:
       operationId: deleteBundle
       description: Sets is_deleted=true (soft delete)
       security:
-        - bearerAuth: []
+        - sessionAuth: []
       parameters:
         - name: bundle_id
           in: path
@@ -1635,71 +1493,35 @@ paths:
 
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: sAccessToken
       description: |
-        JWT access token (HS256, 30min expiry).
-        Claims: `sub` (account_id), `tv` (token_version), `exp`, `type`.
+        SuperTokens session cookie. Automatically set by SDK on sign-in.
+        Access token also available in `st-access-token` response header.
+        Session claims include `sub` (supertokens_user_id), roles, and custom data.
 
   schemas:
     # --------------------------------------------------------------------------
     # Auth Schemas
     # --------------------------------------------------------------------------
-
-    RegisterRequest:
-      type: object
-      required: [email, password]
-      properties:
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-          minLength: 8
-        display_name:
-          type: string
-        units:
-          type: string
-          enum: [metric, imperial]
-          default: metric
-
-    LoginRequest:
-      type: object
-      required: [email, password]
-      properties:
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-
-    AuthResponse:
-      type: object
-      properties:
-        user:
-          $ref: '#/components/schemas/UserResponse'
-        tokens:
-          $ref: '#/components/schemas/TokenResponse'
-
-    TokenResponse:
-      type: object
-      properties:
-        access_token:
-          type: string
-        refresh_token:
-          type: string
-        expires_in:
-          type: integer
-          description: Access token expiry in seconds
+    #
+    # NOTE: Registration, login, and token schemas are handled by SuperTokens.
+    # Only UserResponse and UpdateUserRequest are defined here for custom endpoints.
+    # --------------------------------------------------------------------------
 
     UserResponse:
       type: object
+      description: User profile returned by GET /auth/me
       properties:
         id:
           type: integer
           format: int64
+          description: Application database Account ID
+        supertokens_user_id:
+          type: string
+          description: SuperTokens Core user ID (UUID format)
         email:
           type: string
           format: email
@@ -1709,6 +1531,7 @@ components:
         role:
           type: string
           enum: [user, editor, admin]
+          description: User role (synced with SuperTokens userroles recipe)
         locale_pref:
           type: string
           nullable: true
@@ -1728,11 +1551,6 @@ components:
         created_at:
           type: string
           format: date-time
-        providers:
-          type: array
-          items:
-            type: string
-          description: Linked auth providers (email, google)
 
     UpdateUserRequest:
       type: object

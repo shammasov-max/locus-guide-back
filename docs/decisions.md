@@ -113,4 +113,45 @@
 
 ---
 
+## ADR-011: SuperTokens for Authentication
+
+**Decision:** Replace custom JWT implementation with SuperTokens library
+**Options considered:**
+1. Custom JWT + refresh tokens (python-jose + bcrypt)
+2. SuperTokens SDK + self-hosted Core ✓
+3. Auth0 / Firebase Auth (managed SaaS)
+
+**Context:**
+Original design specified custom JWT + refresh token implementation with:
+- Manual password hashing (Argon2id)
+- Manual token generation/validation
+- Custom refresh token rotation logic
+- Custom password reset flow
+- Manual Google ID token verification
+- Custom session invalidation (token_version)
+
+**Rationale:**
+1. **Security:** Battle-tested session management, CSRF protection, secure token rotation
+2. **Reduced complexity:** No custom token/session logic to maintain
+3. **OAuth integration:** Built-in provider support with automatic account linking
+4. **Extensibility:** Easy to add Apple, GitHub, etc. without code changes
+5. **Dashboard:** Built-in admin UI for user management at `/auth/dashboard`
+6. **Self-hosted:** No vendor lock-in, data stays in our PostgreSQL database
+
+**Consequences:**
+- Requires SuperTokens Core service (Docker container)
+- Auth tables managed by SuperTokens, not Alembic migrations
+- Simplified Account table (removed AuthIdentity, RefreshToken, PasswordResetToken)
+- API paths split: SuperTokens at `/auth/*`, custom at `/api/v1/auth/*`
+- Added `supertokens_user_id` column to link Account to SuperTokens user
+
+**Removed from original design:**
+- `AuthIdentity` table → SuperTokens `emailpassword_users` + `thirdparty_users`
+- `RefreshToken` table → SuperTokens `session_info`
+- `PasswordResetToken` table → SuperTokens `emailpassword_pswd_reset_tokens`
+- `token_version` column → SuperTokens session revocation
+
+---
+
 *Generated: 2025-12-31*
+*Updated: 2026-01-07 (ADR-011)*

@@ -1,6 +1,6 @@
 # Auth Domain
 
-JWT authentication, OAuth (Google), session management, user preferences.
+SuperTokens authentication, OAuth (Google), session management, user preferences.
 
 ## ERD
 
@@ -8,95 +8,110 @@ JWT authentication, OAuth (Google), session management, user preferences.
 ┌──────────────────────────────────────────────────────────────┐
 │                          Account                             │
 │──────────────────────────────────────────────────────────────│
-│ id              │ BigInt PK                                  │
-│ email           │ String(255)! UNIQUE*                       │
-│ display_name    │ Text?                                      │
-│ role            │ Text! CHECK('user','editor','admin') DEF=user│
-│ locale_pref     │ Text?                                      │
-│ ui_lang         │ Text?                                      │
-│ audio_lang      │ Text?                                      │
-│ character       │ JSONB?  -- flexible object, any structure  │
-│ units           │ Text! CHECK('metric','imperial')           │
-│ token_version   │ Int! DEFAULT=0                             │
-│ created_at      │ DateTime(tz)! DEFAULT=now()                │
-└────────────────────────┬─────────────────────────────────────┘
-                         │ 1:N
-           ┌─────────────┴─────────────┐
-           ▼                           ▼
-┌────────────────────────┐  ┌─────────────────────────────────┐
-│    AuthIdentity        │  │       RefreshToken              │
-│────────────────────────│  │─────────────────────────────────│
-│ id          │ BigInt PK│  │ id          │ BigInt PK         │
-│ account_id  │ FK! *    │  │ account_id  │ FK! *             │
-│ provider    │ Text!    │  │ token_hash  │ Text! UNIQUE      │
-│ provider_subject Text! │  │ device_info │ Text?             │
-│ email_verified Bool! 0 │  │ created_at  │ DateTime(tz)!     │
-│ password_hash  Text?   │  │ expires_at  │ DateTime(tz)! *   │
-│ created_at DateTime(tz)│  │ revoked_at  │ DateTime(tz)?     │
-│ UNIQUE(provider,subj)  │  └─────────────────────────────────┘
-└────────┬───────────────┘
-         │ 1:N
-         ▼
-┌──────────────────────────┐
-│  PasswordResetToken      │
-│──────────────────────────│
-│ id          │ BigInt PK  │
-│ identity_id │ FK!        │
-│ token_hash  │ Text! UNIQ │
-│ created_at  │ DateTime!  │
-│ expires_at  │ DateTime!  │
-│ used_at     │ DateTime?  │
-└──────────────────────────┘
+│ id                  │ BigInt PK                              │
+│ supertokens_user_id │ String(36)! UNIQUE*  -- link to ST     │
+│ email               │ String(255)! UNIQUE*                   │
+│ display_name        │ Text?                                  │
+│ role                │ Text! CHECK('user','editor','admin')   │
+│ locale_pref         │ Text?                                  │
+│ ui_lang             │ Text?                                  │
+│ audio_lang          │ Text?                                  │
+│ character           │ JSONB?  -- flexible object             │
+│ units               │ Text! CHECK('metric','imperial')       │
+│ created_at          │ DateTime(tz)! DEFAULT=now()            │
+└──────────────────────────────────────────────────────────────┘
 ```
 
+### SuperTokens-Managed Tables
+
+The following tables are created and managed by SuperTokens Core (not Alembic):
+
+| Table | Purpose |
+|-------|---------|
+| `all_auth_recipe_users` | User registry across all recipes |
+| `emailpassword_users` | Email/password credentials |
+| `emailpassword_pswd_reset_tokens` | Password reset tokens |
+| `thirdparty_users` | OAuth provider identities |
+| `session_info` | Active sessions |
+| `user_roles` | Role assignments |
+| `roles` | Role definitions |
+| `role_permissions` | Permission assignments |
+
 ## API
+
+### SuperTokens-Managed Endpoints
+
+**Base:** `/auth` (handled by SuperTokens SDK middleware)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/signup` | Email/password registration |
+| POST | `/signin` | Email/password login |
+| POST | `/signout` | Logout (revoke session) |
+| POST | `/session/refresh` | Refresh access token |
+| GET | `/authorisationurl` | Get OAuth redirect URL |
+| POST | `/signinup/callback/:providerId` | OAuth callback |
+| POST | `/user/password/reset/token` | Request password reset |
+| POST | `/user/password/reset` | Confirm password reset |
+
+**Full API docs:** https://supertokens.com/docs/thirdpartyemailpassword/apis
+
+### Custom Endpoints
 
 **Base:** `/api/v1/auth`
 
 **Full OpenAPI spec:** [`docs/api/openapi.yaml`](../api/openapi.yaml)
 
-### Public
+| Method | Path | Auth | Request | Response |
+|--------|------|------|---------|----------|
+| GET | `/me` | Session | — | `UserResponse` 200 |
+| PATCH | `/me` | Session | `{display_name?, units?, ...}` | `UserResponse` 200 |
+| DELETE | `/me` | Session | — | `{message}` 200 |
+| POST | `/logout-all` | Session | — | `{message}` 200 |
 
-| Method | Path | Request | Response |
-|--------|------|---------|----------|
-| POST | `/register` | `{email, password, display_name?, units?}` | `{user, tokens}` 201 |
-| POST | `/login` | `{email, password}` | `{user, tokens}` 200 |
-| POST | `/google` | `{id_token}` | `{user, tokens}` 200 |
-| POST | `/refresh` | `{refresh_token}` | `{access_token, refresh_token, expires_in}` 200 |
-| POST | `/password-reset/request` | `{email}` | `{message}` 200 (always success) |
-| POST | `/password-reset/confirm` | `{token, new_password}` | `{message}` 200 |
-
-### Protected (Bearer)
-
-| Method | Path | Request | Response |
-|--------|------|---------|----------|
-| GET | `/me` | — | `{id, email, display_name, locale_pref, ui_lang, audio_lang, character, units, created_at, providers[]}` 200 |
-| PATCH | `/me` | `{display_name?, units?, ...}` | Updated UserResponse 200 |
-| DELETE | `/me` | — | `{message}` 200 |
-| POST | `/logout` | `{refresh_token}` | `{message}` 200 |
-| POST | `/logout-all` | — | `{message}` 200 (increments token_version) |
-
-**Errors:** 400 (bad request), 401 (invalid auth), 404 (not found), 409 (email exists), 422 (validation)
+**Errors:** 400 (bad request), 401 (invalid session), 403 (forbidden), 422 (validation)
 
 ## Patterns
 
-**Roles:** Single role per account. Checked via JWT claim or DB lookup.
+### Session Management
+
+SuperTokens handles sessions via HTTP-only cookies + access tokens:
+- **Access token:** Short-lived, in `sAccessToken` cookie or `st-access-token` header
+- **Refresh token:** HTTP-only cookie, automatic rotation
+- **Anti-CSRF:** Built-in protection via `sAntiCsrf` cookie
+
+### Roles
+
+Dual storage for performance:
+- **SuperTokens `userroles` recipe:** Claims in access token for fast verification
+- **`Account.role` column:** Database fallback, admin management UI
+
+**Roles:**
 - `user` — End user (default). Mobile app access only.
 - `editor` — Content creator. Can create/edit tours, access `/editor/*` endpoints.
 - `admin` — Administrator. Full access including `/admin/*` endpoints.
 
-**Password:** Argon2id `time=3, memory=64MB (65536KB), parallelism=4, hash_len=32, salt_len=16`
+### Password
 
-**Access Token:** JWT HS256, 30min expiry
-```json
-{"sub": "123", "tv": 0, "exp": 1705312200, "type": "access"}
-```
+SuperTokens bcrypt hashing (configurable via Core settings).
 
-**Refresh Token:** SHA-256 hash stored, 30d expiry, rotation on use (old revoked, new issued)
+### OAuth Providers
 
-**Multi-provider:** User can link both email + google to single account via email match
+- **Google** (primary) — Configured via `thirdparty` recipe
+- Extensible: Add Apple, GitHub, etc. via SuperTokens provider config
 
-**Password Reset:** 1h expiry, single-use, SHA-256 hash stored
+### Account Linking
+
+SuperTokens handles email-based account linking automatically:
+- Same email from email/password and Google → linked to single user
+- Managed via `all_auth_recipe_users` table
+
+### Account Sync
+
+On SuperTokens sign-up/sign-in:
+1. SuperTokens creates/retrieves user in Core
+2. Recipe override creates/syncs Account record in our database
+3. `Account.supertokens_user_id` links to SuperTokens user
 
 ## Stories
 

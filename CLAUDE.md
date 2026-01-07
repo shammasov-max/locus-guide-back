@@ -2,13 +2,15 @@
 - **FastAPI** + Uvicorn (async)
 - **PostgreSQL 16** + PostGIS 3.4
 - **SQLAlchemy 2.0** async + Alembic
-- **JWT** авторизация (python-jose + bcrypt)
+- **SuperTokens** authentication
+  - Recipes: emailpassword, thirdparty (Google), session, userroles
+  - Core: Self-hosted PostgreSQL backend
 
 ## Postgres model rules
 | **Language PK** | VARCHAR code | Natural key ('en', 'ru'), no joins needed |
 | **User settings** | Embedded in users | Simpler, single query for user |
 | **i18n textual columns** | HSTORE columns has suffix *_i18n in the name lang->value map | Efficient, type-safe, no translation tables |
-| **geodata, lat lon coordinates** |  store as Postgis Point 
+| **geodata, lat lon coordinates** |  store as Postgis Point
 
 # Entity Glossary — Locus Guide
 ---
@@ -29,7 +31,7 @@ All roles share an **Account** entity as their unified identity.
 ## Entity Schemas
 
 See domain docs for ERDs, API routes, and patterns:
-- `docs/domains/auth.md` — Account, AuthIdentity, RefreshToken
+- `docs/domains/auth.md` — Account (SuperTokens-linked), session management
 - `docs/domains/geo.md` — Country, City
 - `docs/domains/tours.md` — Tour, Route, Waypoint, Run
 
@@ -50,4 +52,3 @@ The following entities are out of scope for the current specification and will b
 ## Документация
 - User stories: `docs/user-stories.md`
 - План разработки: `plan.md`
- 

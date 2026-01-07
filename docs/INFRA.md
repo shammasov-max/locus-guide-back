@@ -1,5 +1,62 @@
 # Infrastructure
 
+## SuperTokens Core
+
+### Service Configuration
+
+```yaml
+services:
+  supertokens:
+    image: registry.supertokens.io/supertokens/supertokens-postgresql:9.0
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRESQL_CONNECTION_URI: "postgresql://postgres:postgres@db:5432/locus_guide"
+    ports:
+      - "3567:3567"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3567/hello"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+```
+
+### Tables Created by SuperTokens
+
+SuperTokens Core creates these tables automatically on first startup:
+
+| Table | Purpose |
+|-------|---------|
+| `all_auth_recipe_users` | User registry across all recipes |
+| `emailpassword_users` | Email/password credentials |
+| `emailpassword_pswd_reset_tokens` | Password reset tokens |
+| `thirdparty_users` | OAuth provider identities |
+| `session_info` | Active sessions |
+| `user_roles` | Role assignments |
+| `roles` | Role definitions |
+| `role_permissions` | Permission assignments |
+
+### Environment Variables
+
+```env
+# SuperTokens
+SUPERTOKENS_CONNECTION_URI=http://localhost:3567
+SUPERTOKENS_API_KEY=  # Optional, for production
+
+# App Info
+APP_NAME=Locus Guide
+API_DOMAIN=http://localhost:8000
+WEBSITE_DOMAIN=http://localhost:3000
+API_BASE_PATH=/auth
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your-client-id
+GOOGLE_CLIENT_SECRET=your-client-secret
+```
+
+---
+
 ## Geo Domain
 
 ### Data Sources
@@ -83,8 +140,11 @@ services:
 
 ### Startup Sequence
 
-1. `docker compose up -d` — Start services
+1. `docker compose up -d` — Start services (db, supertokens, app)
 2. Wait for db healthcheck (pg_isready)
-3. `docker exec app python scripts/download_geonames.py` — Fetch data (~770 MB)
-4. `docker exec app python scripts/import_data.py` — Populate database (~2 min)
-5. API ready at `http://localhost:8000/api/v1/geo/autocomplete`
+3. Wait for supertokens healthcheck (curl /hello)
+4. SuperTokens Core auto-creates auth tables
+5. Run Alembic migrations (creates Account + other app tables)
+6. `docker exec app python scripts/download_geonames.py` — Fetch data (~770 MB)
+7. `docker exec app python scripts/import_data.py` — Populate database (~2 min)
+8. API ready at `http://localhost:8000/api/v1/geo/autocomplete`

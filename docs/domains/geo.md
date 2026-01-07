@@ -333,9 +333,13 @@ CREATE INDEX idx_geo_names_search_term_trgm
 |-------|------|----------|-------------|-------------|
 | `q` | string | Yes | 1-200 chars | Search query |
 | `lang` | string | No | BCP 47 | User's language (prioritizes results) |
-| `lat` | float | No | -90..90 | User latitude (for distance sort) |
-| `lon` | float | No | -180..180 | User longitude |
+| `lat` | float | No | -90..90 | User latitude for distance-based sorting |
+| `lon` | float | No | -180..180 | User longitude (required if `lat` provided) |
 | `limit` | int | No | 1-50, def:10 | Max results |
+
+**User Story Integration:**
+- **US-001** (Cities with tour counts): Tours domain joins `geo_names_cities.geonameid` to aggregate tour counts per city
+- **US-002** (Auto-detect location): Mobile app passes device `lat`/`lon`; default radius for "nearby" is 50km; results sorted by `distance_km ASC`
 
 ### Response
 

@@ -14,9 +14,10 @@ All tables use the `geo_names_` prefix:
 |-------|-------------|
 | `geo_names_countries` | Country reference data |
 | `geo_names_cities` | City reference data with PostGIS coordinates |
-| `geo_names_alternate_names` | Multilingual city names |
 | `geo_names_admin1_codes` | Region/state names |
-| `geo_names_city_search_index` | Denormalized search index |
+| `geo_names_city_search_index` | Denormalized search index (includes alternate names) |
+
+**Note:** `alternateNamesV2.txt` is streamed during import and inserted directly into `geo_names_city_search_index`. No separate `geo_names_alternate_names` table is created.
 
 These tables are **external seed data** and do NOT follow project conventions (see `docs/domains/geo.md`).
 
@@ -163,11 +164,10 @@ from sqlalchemy.orm import sessionmaker
 ### Import Order (Dependencies)
 
 ```
-1. geo_names_countries      ← no dependencies
-2. geo_names_admin1_codes   ← no dependencies
-3. geo_names_cities         ← depends on geo_names_countries (FK)
-4. geo_names_alternate_names ← depends on geo_names_cities (FK)
-5. geo_names_city_search_index ← computed from cities + alternate_names
+1. geo_names_countries        ← no dependencies
+2. geo_names_admin1_codes     ← no dependencies
+3. geo_names_cities           ← depends on geo_names_countries (FK)
+4. geo_names_city_search_index ← built from cities + alternateNamesV2.txt stream
 ```
 
 ### Step-by-Step Process
@@ -183,7 +183,6 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE TABLE IF NOT EXISTS geo_names_countries (...);
 CREATE TABLE IF NOT EXISTS geo_names_admin1_codes (...);
 CREATE TABLE IF NOT EXISTS geo_names_cities (...);
-CREATE TABLE IF NOT EXISTS geo_names_alternate_names (...);
 CREATE TABLE IF NOT EXISTS geo_names_city_search_index (...);
 ```
 
@@ -192,7 +191,6 @@ CREATE TABLE IF NOT EXISTS geo_names_city_search_index (...);
 ```sql
 -- Order matters due to FK constraints
 TRUNCATE geo_names_city_search_index CASCADE;
-TRUNCATE geo_names_alternate_names CASCADE;
 TRUNCATE geo_names_cities CASCADE;
 TRUNCATE geo_names_admin1_codes CASCADE;
 TRUNCATE geo_names_countries CASCADE;
@@ -247,34 +245,7 @@ ON CONFLICT (geonameid) DO NOTHING
 
 **Estimated time:** ~5 seconds
 
-#### Step 6: Import Alternate Names (~15M rows, all languages)
-
-```python
-# Parse alternateNamesV2.txt
-# Filter: only geonameid IN imported_cities
-# Convert boolean fields: "1" → True, "" → False
-# Batch insert, 10000 rows at a time
-# Commit every 100K rows
-# Show progress: "Processed X/15M lines..."
-```
-
-**SQL:**
-```sql
-INSERT INTO geo_names_alternate_names (id, geonameid, isolanguage, alternate_name,
-                             is_preferred_name, is_short_name,
-                             is_colloquial, is_historic,
-                             from_period, to_period)
-VALUES (:id, :geonameid, :isolanguage, :alternate_name,
-        :is_preferred_name, :is_short_name,
-        :is_colloquial, :is_historic,
-        :from_period, :to_period)
-ON CONFLICT (id) DO NOTHING
-```
-
-**Estimated time:** ~5-10 minutes
-**Memory note:** Stream file, don't load entirely into memory
-
-#### Step 7: Build Search Index
+#### Step 6: Build Search Index (from cities + alternateNamesV2.txt)
 
 ```sql
 -- From city names
@@ -289,15 +260,38 @@ FROM geo_names_cities
 WHERE asciiname IS NOT NULL
   AND lower(asciiname) != lower(name);
 
--- From alternate names
-INSERT INTO geo_names_city_search_index (geonameid, search_term, isolanguage, source)
-SELECT geonameid, alternate_name, isolanguage, 'alternate'
-FROM geo_names_alternate_names;
+-- From alternateNamesV2.txt (streamed, not persisted as table)
+-- Filter: geonameid IN imported_cities
+-- Filter: isolanguage IN SUPPORTED_LANGUAGES OR isolanguage IS NULL
+-- Skip special codes: link, wkdt, abbr, post, iata, icao, unlc
+-- Batch insert 10000 rows at a time
 ```
 
-**Estimated time:** ~30 seconds
+```python
+# Stream alternateNamesV2.txt
+for line in open("alternateNamesV2.txt", encoding="utf-8"):
+    fields = line.strip().split("\t")
+    geonameid = int(fields[1])
+    isolanguage = fields[2] if fields[2] else None
+    alternate_name = fields[3]
 
-#### Step 8: Create Indexes
+    # Skip if city not in imported set
+    if geonameid not in imported_city_ids:
+        continue
+    # Skip special codes
+    if isolanguage in ("link", "wkdt", "abbr", "post", "iata", "icao", "unlc"):
+        continue
+    # Filter to supported languages (or NULL for unnamed)
+    if isolanguage and isolanguage not in SUPPORTED_LANGUAGES:
+        continue
+
+    batch.append((geonameid, alternate_name, isolanguage, "alternate"))
+```
+
+**Estimated time:** ~3-5 minutes (15M lines → ~300K inserts after filtering)
+**Memory note:** Stream file, don't load entirely into memory
+
+#### Step 7: Create Indexes
 
 ```sql
 -- Spatial
@@ -311,29 +305,26 @@ CREATE INDEX IF NOT EXISTS idx_geo_names_cities_population
   ON geo_names_cities (population DESC);
 CREATE INDEX IF NOT EXISTS idx_geo_names_cities_feature_code
   ON geo_names_cities (feature_code);
-CREATE INDEX IF NOT EXISTS idx_geo_names_altnames_geonameid
-  ON geo_names_alternate_names (geonameid);
-CREATE INDEX IF NOT EXISTS idx_geo_names_altnames_isolanguage
-  ON geo_names_alternate_names (isolanguage);
 CREATE INDEX IF NOT EXISTS idx_geo_names_search_geonameid
   ON geo_names_city_search_index (geonameid);
 
 -- Text pattern (for LIKE 'prefix%')
-CREATE INDEX IF NOT EXISTS idx_geo_names_altnames_name_lower
-  ON geo_names_alternate_names (lower(alternate_name) text_pattern_ops);
 CREATE INDEX IF NOT EXISTS idx_geo_names_search_term_lower
   ON geo_names_city_search_index (lower(search_term) text_pattern_ops);
+
+-- GIN trigram for fuzzy search
+CREATE INDEX IF NOT EXISTS idx_geo_names_search_term_trgm
+  ON geo_names_city_search_index USING GIN (lower(search_term) gin_trgm_ops);
 ```
 
 **Estimated time:** ~1-2 minutes
 
-#### Step 9: Vacuum Analyze
+#### Step 8: Vacuum Analyze
 
 ```sql
 VACUUM ANALYZE geo_names_countries;
 VACUUM ANALYZE geo_names_admin1_codes;
 VACUUM ANALYZE geo_names_cities;
-VACUUM ANALYZE geo_names_alternate_names;
 VACUUM ANALYZE geo_names_city_search_index;
 ```
 
@@ -348,10 +339,9 @@ VACUUM ANALYZE geo_names_city_search_index;
 | `geo_names_countries` | ~250 | ~50 KB |
 | `geo_names_admin1_codes` | ~4,000 | ~200 KB |
 | `geo_names_cities` | ~26,000 | ~5 MB |
-| `geo_names_alternate_names` | ~500,000* | ~100 MB |
-| `geo_names_city_search_index` | ~550,000* | ~80 MB |
+| `geo_names_city_search_index` | ~300,000* | ~50 MB |
 
-*After filtering to only cities in `cities15000.txt`
+*Includes city names + ASCII names + alternate names filtered to 30 languages
 
 ---
 
@@ -419,11 +409,12 @@ python scripts/import_data.py
 #   Importing geo_names_countries... 250 rows
 #   Importing geo_names_admin1_codes... 4,012 rows
 #   Importing geo_names_cities... 26,437 rows
-#   Importing geo_names_alternate_names... 523,891 rows
-#   Building geo_names_city_search_index... 576,328 rows
+#   Building geo_names_city_search_index...
+#     From cities: 52,874 rows
+#     Streaming alternateNamesV2.txt: 15,234,567 lines → 247,582 rows (filtered)
 #   Creating indexes...
 #   Vacuum analyze...
-#   Done!
+#   Done! Total: ~6 minutes
 
 # With custom settings
 GEONAMES_DATA_DIR=/path/to/data \
